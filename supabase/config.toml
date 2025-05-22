@@ -1,6 +1,1 @@
-
-# Config file for our Supabase CLI commands, etc.
-
-[functions]
-[functions.setup-initial-users]
-verify_jwt = false
+project_id = "xfkkmkxeoqawqnvahhoe"
