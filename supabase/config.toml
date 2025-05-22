@@ -4,3 +4,6 @@ project_id = "xfkkmkxeoqawqnvahhoe"
 [functions]
 [functions.setup-initial-users]
 verify_jwt = false
+
+[functions.get-affiliate-data]
+verify_jwt = true

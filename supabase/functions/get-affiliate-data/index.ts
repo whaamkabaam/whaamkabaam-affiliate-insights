@@ -1,0 +1,222 @@
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@14.4.0?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface CommissionMapping {
+  [key: string]: {
+    viewer_pays: number;
+    affiliate_get: number;
+  };
+}
+
+interface PromoCodeMap {
+  [key: string]: string;
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { affiliateCode, year, month } = await req.json();
+    
+    if (!affiliateCode || !year || !month) {
+      return new Response(
+        JSON.stringify({ error: "Missing affiliateCode, year, or month parameter" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+      apiVersion: "2023-10-16",
+    });
+
+    // Product commission mapping from Python script
+    const PRODUCT_COMMISSIONS: CommissionMapping = {
+      "prod_RINKAvP3L2kZeV": { viewer_pays: 35.10, affiliate_get: 7.80 },
+      "prod_RINJvQw1Qw1Qw1Q": { viewer_pays: 42.30, affiliate_get: 9.40 },
+      "prod_RINO6yE0y4O9gX": { viewer_pays: 116.10, affiliate_get: 29.80 },
+    };
+
+    // Promo code mapping from Python script
+    const PROMO_CODES: PromoCodeMap = {
+      "nic": "promo_1QyefCCgyJ2z2jNZEZv16p7s",
+      "maru": "promo_1QvpMsCgyJ2z2jNZ0IC6vKLk",
+    };
+
+    // Helper function to get the product ID from a session
+    async function getProductIdFromSession(session: any): Promise<string | null> {
+      try {
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+        if (lineItems.data && lineItems.data.length > 0) {
+          const item = lineItems.data[0];
+          // Get the price object to access the product ID
+          if (item.price && item.price.product) {
+            return typeof item.price.product === 'string' 
+              ? item.price.product 
+              : item.price.product.id;
+          }
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error fetching line items for session ${session.id}:`, error);
+        return null;
+      }
+    }
+
+    // Calculate start and end date timestamps for the given year and month
+    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate(); // Get last day of month
+    const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59);
+
+    // We'll use this to store our commission data
+    const commissions = [];
+    const customerEmails = new Set();
+    let totalRevenue = 0;
+    let totalCommission = 0;
+
+    if (affiliateCode === "ayoub") {
+      // Special case for ayoub: all $149 sales without 'nic' or 'maru' code
+      // List all checkout sessions within the date range
+      const sessions = await stripe.checkout.sessions.list({ 
+        limit: 100,
+        created: {
+          // Convert to seconds for Stripe API
+          gte: Math.floor(startDate.getTime() / 1000),
+          lte: Math.floor(endDate.getTime() / 1000)
+        },
+        expand: ['data.discounts']
+      });
+
+      // Process each session
+      for (const session of sessions.data) {
+        // Skip sessions that aren't paid
+        if (session.payment_status !== 'paid') continue;
+        
+        // Skip if any promo code is used
+        const hasPromoCode = session.discounts?.some((discount: any) => 
+          Object.values(PROMO_CODES).includes(discount.promotion_code)
+        );
+        
+        if (hasPromoCode) continue;
+        
+        // Get product ID
+        const productId = await getProductIdFromSession(session);
+        if (productId !== "prod_RINO6yE0y4O9gX") continue;
+        
+        // Calculate commission (fixed at $20 for ayoub as per Python script)
+        const amount = session.amount_total / 100;
+        const commission = 20.0;
+        
+        // Get customer email
+        const customerEmail = session.customer_details?.email || "unknown@example.com";
+        customerEmails.add(customerEmail);
+        
+        // Collect data
+        totalRevenue += amount;
+        totalCommission += commission;
+        
+        // Store commission data
+        commissions.push({
+          sessionId: session.id,
+          paymentIntent: session.payment_intent,
+          customerEmail,
+          amount,
+          commission,
+          date: new Date(session.created * 1000).toISOString(),
+          productId
+        });
+      }
+    } else if (PROMO_CODES[affiliateCode]) {
+      // For nic and maru, filter by promo code
+      const promoId = PROMO_CODES[affiliateCode];
+      
+      // List all checkout sessions
+      const sessions = await stripe.checkout.sessions.list({ 
+        limit: 100,
+        created: {
+          gte: Math.floor(startDate.getTime() / 1000),
+          lte: Math.floor(endDate.getTime() / 1000)
+        },
+        expand: ['data.discounts']
+      });
+      
+      // Process each session that has our promo code
+      for (const session of sessions.data) {
+        // Skip sessions that aren't paid
+        if (session.payment_status !== 'paid') continue;
+        
+        // Check if this session used our promo code
+        const hasPromoCode = session.discounts?.some((discount: any) => 
+          discount.promotion_code === promoId
+        );
+        
+        if (!hasPromoCode) continue;
+        
+        // Get product ID
+        const productId = await getProductIdFromSession(session);
+        if (!productId) continue;
+        
+        // Calculate commission based on product
+        const amount = session.amount_total / 100;
+        let commission = 0;
+        
+        if (PRODUCT_COMMISSIONS[productId]) {
+          commission = PRODUCT_COMMISSIONS[productId].affiliate_get;
+        }
+        
+        // Get customer email
+        const customerEmail = session.customer_details?.email || "unknown@example.com";
+        customerEmails.add(customerEmail);
+        
+        // Collect data
+        totalRevenue += amount;
+        totalCommission += commission;
+        
+        // Store commission data
+        commissions.push({
+          sessionId: session.id,
+          paymentIntent: session.payment_intent,
+          customerEmail,
+          amount,
+          commission,
+          date: new Date(session.created * 1000).toISOString(),
+          productId
+        });
+      }
+    } else {
+      return new Response(
+        JSON.stringify({ error: "Invalid affiliate code" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    // Return compiled data
+    return new Response(
+      JSON.stringify({
+        commissions,
+        summary: {
+          totalRevenue,
+          totalCommission,
+          customerCount: customerEmails.size
+        }
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+    );
+
+  } catch (error) {
+    console.error("Error processing request:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
+});

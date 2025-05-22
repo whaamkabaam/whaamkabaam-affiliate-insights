@@ -10,11 +10,12 @@ import { CommissionTable } from "@/components/CommissionTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/MonthPicker";
-import { DollarSign, Users, TrendingUp, Calendar } from "lucide-react";
+import { DollarSign, Users, TrendingUp, Calendar, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { fetchCommissionData, summary, isLoading } = useAffiliate();
+  const { fetchCommissionData, summary, isLoading, error } = useAffiliate();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
 
@@ -22,9 +23,24 @@ export default function Dashboard() {
     fetchCommissionData(selectedYear, selectedMonth);
   }, [fetchCommissionData, selectedYear, selectedMonth]);
 
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
   const handleMonthChange = (year: number, month: number) => {
     setSelectedYear(year);
     setSelectedMonth(month);
+  };
+
+  const handleCopyLink = () => {
+    if (user?.affiliateCode) {
+      const url = `https://whaamkabaam.com/?ref=${user.affiliateCode}`;
+      navigator.clipboard.writeText(url)
+        .then(() => toast.success("Affiliate link copied to clipboard"))
+        .catch(() => toast.error("Failed to copy link"));
+    }
   };
 
   return (
@@ -43,69 +59,75 @@ export default function Dashboard() {
             <MonthPicker onMonthChange={handleMonthChange} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatsCard
-              title="Total Commission"
-              value={`$${summary.totalCommission.toFixed(2)}`}
-              description={`For ${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`}
-              icon={<DollarSign className="w-4 h-4" />}
-              className="bg-primary/5"
-            />
-            <StatsCard
-              title="Total Revenue"
-              value={`$${summary.totalRevenue.toFixed(2)}`}
-              description="Generated through your affiliate link"
-              icon={<TrendingUp className="w-4 h-4" />}
-            />
-            <StatsCard
-              title="New Customers"
-              value={summary.customerCount}
-              description="People who used your affiliate code"
-              icon={<Users className="w-4 h-4" />}
-            />
-            <StatsCard
-              title="Your Code"
-              value={user?.affiliateCode || ""}
-              description="Share this code with your audience"
-              icon={<Calendar className="w-4 h-4" />}
-              className="bg-secondary/10"
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="md:col-span-3">
-              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle>Your Affiliate Link</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`https://whaamkabaam.com/?ref=${user?.affiliateCode}`);
-                    alert("Link copied to clipboard!");
-                  }}
-                >
-                  Copy
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-muted p-3 rounded-md overflow-x-auto">
-                  <code className="text-sm">https://whaamkabaam.com/?ref={user?.affiliateCode}</code>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <MonthlyCommissionChart />
-          </div>
-          
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
-              <Button variant="outline" size="sm">
-                View All
-              </Button>
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2 text-lg">Loading your commission data...</span>
             </div>
-            <CommissionTable limit={5} />
-          </div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatsCard
+                  title="Total Commission"
+                  value={`$${summary.totalCommission.toFixed(2)}`}
+                  description={`For ${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`}
+                  icon={<DollarSign className="w-4 h-4" />}
+                  className="bg-primary/5"
+                />
+                <StatsCard
+                  title="Total Revenue"
+                  value={`$${summary.totalRevenue.toFixed(2)}`}
+                  description="Generated through your affiliate link"
+                  icon={<TrendingUp className="w-4 h-4" />}
+                />
+                <StatsCard
+                  title="New Customers"
+                  value={summary.customerCount}
+                  description="People who used your affiliate code"
+                  icon={<Users className="w-4 h-4" />}
+                />
+                <StatsCard
+                  title="Your Code"
+                  value={user?.affiliateCode || ""}
+                  description="Share this code with your audience"
+                  icon={<Calendar className="w-4 h-4" />}
+                  className="bg-secondary/10"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                <Card className="md:col-span-3">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                    <CardTitle>Your Affiliate Link</CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleCopyLink}
+                    >
+                      Copy
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted p-3 rounded-md overflow-x-auto">
+                      <code className="text-sm">https://whaamkabaam.com/?ref={user?.affiliateCode}</code>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <MonthlyCommissionChart />
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
+                  <Button variant="outline" size="sm">
+                    View All
+                  </Button>
+                </div>
+                <CommissionTable limit={5} />
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>
