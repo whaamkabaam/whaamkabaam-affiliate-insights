@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -33,7 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to fetch additional user data like role and affiliate code
   const fetchUserData = async (userId: string) => {
     try {
-      // Check if user is admin using raw query
+      // Check if user is admin using RPC function
       const { data: roleData, error: roleError } = await supabase
         .rpc('get_user_role', { user_id: userId });
 
@@ -41,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error checking admin role:", roleError);
       }
       
-      // Get affiliate code if exists
+      // Get affiliate code if exists using RPC function
       const { data: affiliateData, error: affiliateError } = await supabase
         .rpc('get_affiliate_data', { user_id: userId });
 
@@ -49,7 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error fetching affiliate data:", affiliateError);
       }
 
-      // Get user profile for name
+      // Get user profile for name from profiles table
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('full_name, display_name')
@@ -66,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         const updatedUser: UserWithRole = { 
           ...prevUser,
-          role: roleData?.role === 'admin' ? 'admin' : 'affiliate',
+          role: roleData === 'admin' ? 'admin' : 'affiliate',
           affiliateCode: affiliateData?.affiliate_code || undefined,
           name: profileData?.full_name || profileData?.display_name || prevUser.email?.split('@')[0] || undefined
         };
@@ -75,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       
       // Use null coalescing for safe access
-      setIsAdmin(roleData?.role === 'admin' || false);
+      setIsAdmin(roleData === 'admin');
     } catch (err) {
       console.error("Error fetching user data:", err);
     }

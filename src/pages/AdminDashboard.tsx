@@ -40,69 +40,26 @@ export default function AdminDashboard() {
         
         if (error) {
           console.error('RPC error:', error);
+          toast.error('Failed to load affiliate data');
+          setAffiliates([]);
+          return;
+        }
+        
+        if (data && Array.isArray(data)) {
+          // Process the RPC data into the correct format
+          const processedAffiliates: EnrichedAffiliate[] = data.map(item => ({
+            id: item.id || '',
+            user_id: item.user_id || '',
+            affiliate_code: item.affiliate_code || '',
+            commission_rate: Number(item.commission_rate) || 0,
+            created_at: item.created_at || '',
+            email: item.email || '',
+            total_commission: Number(item.total_commission) || 0,
+            total_sales: Number(item.total_sales) || 0,
+            customer_count: Number(item.customer_count) || 0
+          }));
           
-          // Fallback logic using direct queries if RPC fails
-          try {
-            // This is a fallback approach using direct data queries
-            const { data: directData, error: directError } = await supabase.rpc('get_all_affiliates');
-
-            if (directError) {
-              throw directError;
-            }
-            
-            if (directData && Array.isArray(directData)) {
-              // Process the direct data manually
-              const enrichedAffiliates = await Promise.all(
-                directData.map(async (affiliate) => {
-                  // Ensure each affiliate has required properties
-                  const enrichedAffiliate: EnrichedAffiliate = {
-                    id: affiliate.id || '',
-                    user_id: affiliate.user_id || '',
-                    affiliate_code: affiliate.affiliate_code || '',
-                    commission_rate: affiliate.commission_rate || 0,
-                    created_at: affiliate.created_at || '',
-                    email: affiliate.email || 'Unknown',
-                    total_commission: 0,
-                    total_sales: 0,
-                    customer_count: 0
-                  };
-                  
-                  // Get commission data
-                  const commissionData = await supabase.rpc('get_affiliate_commission_data', { 
-                    affiliate_id: enrichedAffiliate.id 
-                  });
-                  
-                  if (commissionData.data) {
-                    enrichedAffiliate.total_commission = commissionData.data.total_commission || 0;
-                    enrichedAffiliate.total_sales = commissionData.data.total_sales || 0;
-                  }
-                  
-                  // Get customer count
-                  const customerCount = await supabase.rpc('count_affiliate_customers', { 
-                    affiliate_code: enrichedAffiliate.affiliate_code 
-                  });
-                  
-                  enrichedAffiliate.customer_count = customerCount.data || 0;
-                  
-                  return enrichedAffiliate;
-                })
-              );
-              
-              setAffiliates(enrichedAffiliates);
-            } else {
-              // Handle the case where data is not an array
-              console.error('Unexpected data format:', directData);
-              toast.error('Failed to load affiliate data: unexpected format');
-              setAffiliates([]);
-            }
-          } catch (fallbackError) {
-            console.error('Fallback error:', fallbackError);
-            toast.error('Failed to load affiliate data');
-            setAffiliates([]);
-          }
-        } else if (data && Array.isArray(data)) {
-          // If RPC function worked, use that data
-          setAffiliates(data as EnrichedAffiliate[]);
+          setAffiliates(processedAffiliates);
         } else {
           // Handle case where data is not an array
           console.error('Unexpected data format from RPC:', data);
