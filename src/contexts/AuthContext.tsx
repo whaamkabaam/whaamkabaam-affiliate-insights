@@ -33,12 +33,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to fetch additional user data like role and affiliate code
   const fetchUserData = async (userId: string) => {
     try {
+      console.log("Fetching additional user data for:", userId);
+      
       // Check if user is admin using RPC function
       const { data: roleData, error: roleError } = await supabase
         .rpc('get_user_role', { user_id: userId });
 
       if (roleError) {
         console.error("Error checking admin role:", roleError);
+      } else {
+        console.log("User role:", roleData);
       }
       
       // Get affiliate code if exists using RPC function
@@ -47,6 +51,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (affiliateError) {
         console.error("Error fetching affiliate data:", affiliateError);
+      } else {
+        console.log("Affiliate data:", affiliateData);
       }
 
       // Get user profile for name from profiles table
@@ -58,6 +64,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (profileError && profileError.message !== 'No rows found') {
         console.error("Error fetching profile data:", profileError);
+      } else {
+        console.log("Profile data:", profileData);
       }
 
       // Parse and extract data from the affiliateData JSON
@@ -90,11 +98,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    console.log("Setting up auth state listener");
+    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        console.log("Auth state changed, event:", _event);
         setSession(newSession);
+        
         if (newSession?.user) {
+          console.log("User in session:", newSession.user.email);
           const extendedUser = newSession.user as UserWithRole;
           setUser(extendedUser);
           
@@ -103,6 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             fetchUserData(newSession.user.id);
           }, 0);
         } else {
+          console.log("No user in session");
           setUser(null);
           setIsAdmin(false);
         }
@@ -111,11 +125,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      console.log("Checking for existing session");
       setSession(existingSession);
+      
       if (existingSession?.user) {
+        console.log("Found existing session for user:", existingSession.user.email);
         const extendedUser = existingSession.user as UserWithRole;
         setUser(extendedUser);
         fetchUserData(existingSession.user.id);
+      } else {
+        console.log("No existing session found");
       }
       
       setIsLoading(false);
@@ -129,13 +148,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log(`Attempting to sign in with email: ${email}`);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Login error:", error);
+        setError(error.message || "Login failed");
+        throw error;
+      }
+      
+      console.log("Login successful", data);
+      
     } catch (err: any) {
+      console.error("Login exception:", err);
       setError(err.message || "Login failed");
       toast.error(err.message || "Login failed");
       throw err;

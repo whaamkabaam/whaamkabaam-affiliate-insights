@@ -6,28 +6,35 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "./Logo";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast.error("Please enter both email and password");
+      return;
+    }
+    
     try {
+      console.log(`Attempting login with email: ${email}`);
       await login(email, password);
       toast.success("Login successful");
-    } catch (err) {
-      // Error is handled in the AuthContext
+    } catch (err: any) {
+      // Error is also handled in the AuthContext, but we can add more specific feedback here
+      console.error("Login error:", err);
+      toast.error(err?.message || "Login failed. Please check your credentials.");
     }
   };
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
-  };
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
+  const toggleShowPassword = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
@@ -58,7 +65,7 @@ export function LoginForm() {
               id="email"
               type="email"
               value={email}
-              onChange={handleEmailChange}
+              onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="email@whaamkabaam.com"
               autoComplete="email"
@@ -74,16 +81,29 @@ export function LoginForm() {
                 Forgot password?
               </a>
             </div>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={handlePasswordChange}
-              required
-              placeholder="••••••••"
-              autoComplete="current-password"
-              className="focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className="focus:outline-none focus:ring-2 focus:ring-primary pr-10"
+              />
+              <button 
+                type="button"
+                onClick={toggleShowPassword}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
           <Button 
             type="submit" 
