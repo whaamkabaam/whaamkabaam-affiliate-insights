@@ -22,6 +22,14 @@ export function LoginForm() {
     }
   };
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+  };
+
   return (
     <Card className="w-full max-w-md bg-card shadow-lg">
       <CardHeader className="space-y-2 items-center text-center">
@@ -50,9 +58,10 @@ export function LoginForm() {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={handleEmailChange}
               required
               placeholder="email@whaamkabaam.com"
+              autoComplete="email"
             />
           </div>
           <div className="space-y-2">
@@ -68,9 +77,10 @@ export function LoginForm() {
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
               required
               placeholder="••••••••"
+              autoComplete="current-password"
             />
           </div>
           <Button 
