@@ -18,6 +18,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 // Helper types to work with tables missing from auto-generated types
+export type UserRole = {
+  id: string;
+  user_id: string;
+  role: AppRole;
+  created_at: string;
+}
+
 export type Affiliate = {
   id: string;
   affiliate_code: string;
@@ -47,13 +54,6 @@ export type Customer = {
 
 export type AppRole = 'admin' | 'affiliate';
 
-export type UserRole = {
-  id: string;
-  user_id: string;
-  role: AppRole;
-  created_at: string;
-}
-
 // Add extension for Supabase with RPC functions to help with TypeScript errors
 declare module '@supabase/supabase-js' {
   interface SupabaseClient<Database = any> {
@@ -64,6 +64,9 @@ declare module '@supabase/supabase-js' {
         head?: boolean;
         count?: 'exact' | 'planned' | 'estimated';
       }
-    ): { data: T | null; error: Error | null; count: number | null; status: number | undefined };
+    ): Promise<{
+      data: T;
+      error: Error | null;
+    }>;
   }
 }

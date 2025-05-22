@@ -35,61 +35,50 @@ export default function AdminDashboard() {
     const fetchAffiliates = async () => {
       try {
         setIsLoading(true);
-        // Use raw SQL query to get affiliate data
+        // Use RPC function to get affiliate data
         const { data, error } = await supabase.rpc('admin_get_affiliates');
         
         if (error) {
-          console.error('Raw SQL error:', error);
+          console.error('RPC error:', error);
           
-          // Fallback to direct query if RPC function isn't available
-          const { data: directData, error: directError } = await supabase
-            .from('affiliates')
-            .select('*');
+          // Fallback logic using direct queries if RPC fails
+          try {
+            // This is a fallback approach using direct data queries
+            const { data: directData, error: directError } = await supabase.rpc('get_all_affiliates');
 
-          if (directError) throw directError;
-          
-          if (directData) {
-            // Process the direct data
-            const enrichedAffiliates = await Promise.all(
-              directData.map(async (affiliate: any) => {
-                try {
-                  // Get email from profiles
-                  const { data: profileData } = await supabase
-                    .from('profiles')
-                    .select('email')
-                    .eq('id', affiliate.id)
-                    .maybeSingle();
+            if (directError) {
+              throw directError;
+            }
+            
+            if (directData) {
+              // Process the direct data manually
+              const enrichedAffiliates = await Promise.all(
+                directData.map(async (affiliate: any) => {
+                  // Get all affiliate data and enrich it
+                  const email = affiliate.email || 'Unknown';
+                  const commissionData = await supabase.rpc('get_affiliate_commission_data', { 
+                    affiliate_id: affiliate.id 
+                  });
                   
-                  // Count the number of customers referred by this affiliate using raw query
-                  const { count: customerCount } = await supabase
-                    .rpc('count_referred_customers', { code: affiliate.affiliate_code })
-                    .single();
-                    
-                  // Get commission data using raw query
-                  const { data: commissionSummary } = await supabase
-                    .rpc('get_affiliate_commission_summary', { affiliate_id: affiliate.id })
-                    .single();
-                    
+                  const customerCount = await supabase.rpc('count_affiliate_customers', { 
+                    affiliate_code: affiliate.affiliate_code 
+                  });
+                  
                   return {
                     ...affiliate,
-                    email: profileData?.email || 'Unknown',
-                    total_commission: commissionSummary?.total_commission || 0,
-                    total_sales: commissionSummary?.total_sales || 0,
-                    customer_count: customerCount || 0
+                    email: email,
+                    total_commission: commissionData?.data?.total_commission || 0,
+                    total_sales: commissionData?.data?.total_sales || 0,
+                    customer_count: customerCount?.data || 0
                   };
-                } catch (enrichError) {
-                  console.error('Error enriching affiliate data:', enrichError);
-                  return {
-                    ...affiliate, 
-                    email: 'Error loading data',
-                    total_commission: 0,
-                    total_sales: 0,
-                    customer_count: 0
-                  };
-                }
-              })
-            );
-            setAffiliates(enrichedAffiliates);
+                })
+              );
+              
+              setAffiliates(enrichedAffiliates);
+            }
+          } catch (fallbackError) {
+            console.error('Fallback error:', fallbackError);
+            toast.error('Failed to load affiliate data');
           }
         } else if (data) {
           // If RPC function worked, use that data

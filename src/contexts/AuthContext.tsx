@@ -35,30 +35,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Check if user is admin using raw query
       const { data: roleData, error: roleError } = await supabase
-        .rpc('get_user_role', { user_id: userId })
-        .maybeSingle();
+        .rpc('get_user_role', { user_id: userId });
 
-      if (roleError && roleError.message !== 'JSON object requested, multiple (or no) rows returned') {
+      if (roleError) {
         console.error("Error checking admin role:", roleError);
       }
       
-      // Get affiliate code if exists using raw query
+      // Get affiliate code if exists
       const { data: affiliateData, error: affiliateError } = await supabase
-        .from('affiliates')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+        .rpc('get_affiliate_data', { user_id: userId });
 
-      if (affiliateError && affiliateError.message !== 'JSON object requested, multiple (or no) rows returned') {
+      if (affiliateError) {
         console.error("Error fetching affiliate data:", affiliateError);
       }
 
       // Get user profile for name
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('full_name, display_name')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
+
+      if (profileError && profileError.message !== 'No rows found') {
+        console.error("Error fetching profile data:", profileError);
+      }
 
       // Update user with additional data
       setUser(prevUser => {
