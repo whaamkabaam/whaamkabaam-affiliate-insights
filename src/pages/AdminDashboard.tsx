@@ -5,14 +5,19 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { supabase, Affiliate } from "@/integrations/supabase/client";
+import { supabase, AffiliateJson } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface EnrichedAffiliate extends Affiliate {
+interface EnrichedAffiliate {
+  id: string;
+  user_id: string;
   email?: string;
+  affiliate_code: string;
+  commission_rate: number;
   total_commission?: number;
   total_sales?: number;
   customer_count?: number;
+  created_at: string;
 }
 
 export default function AdminDashboard() {
@@ -47,17 +52,21 @@ export default function AdminDashboard() {
         
         if (data && Array.isArray(data)) {
           // Process the RPC data into the correct format
-          const processedAffiliates: EnrichedAffiliate[] = data.map(item => ({
-            id: item.id || '',
-            user_id: item.user_id || '',
-            affiliate_code: item.affiliate_code || '',
-            commission_rate: Number(item.commission_rate) || 0,
-            created_at: item.created_at || '',
-            email: item.email || '',
-            total_commission: Number(item.total_commission) || 0,
-            total_sales: Number(item.total_sales) || 0,
-            customer_count: Number(item.customer_count) || 0
-          }));
+          const processedAffiliates: EnrichedAffiliate[] = data.map(item => {
+            // Safely cast and access the JSON properties
+            const affiliateJson = item as unknown as AffiliateJson;
+            return {
+              id: affiliateJson.id || '',
+              user_id: affiliateJson.user_id || '',
+              affiliate_code: affiliateJson.affiliate_code || '',
+              commission_rate: Number(affiliateJson.commission_rate) || 0,
+              created_at: affiliateJson.created_at || '',
+              email: affiliateJson.email || '',
+              total_commission: Number(affiliateJson.total_commission) || 0,
+              total_sales: Number(affiliateJson.total_sales) || 0,
+              customer_count: Number(affiliateJson.customer_count) || 0
+            };
+          });
           
           setAffiliates(processedAffiliates);
         } else {

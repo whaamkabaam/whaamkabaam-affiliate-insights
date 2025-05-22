@@ -1,5 +1,6 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase, AppRole } from "@/integrations/supabase/client";
+import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
@@ -59,6 +60,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error fetching profile data:", profileError);
       }
 
+      // Parse and extract data from the affiliateData JSON
+      let affiliateCode: string | undefined = undefined;
+      if (affiliateData && typeof affiliateData === 'object') {
+        // Handle the JSON object safely
+        const parsedData = affiliateData as unknown as AffiliateData;
+        affiliateCode = parsedData.affiliate_code;
+      }
+
       // Update user with additional data
       setUser(prevUser => {
         if (!prevUser) return null;
@@ -66,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const updatedUser: UserWithRole = { 
           ...prevUser,
           role: roleData === 'admin' ? 'admin' : 'affiliate',
-          affiliateCode: affiliateData?.affiliate_code || undefined,
+          affiliateCode: affiliateCode,
           name: profileData?.full_name || profileData?.display_name || prevUser.email?.split('@')[0] || undefined
         };
         
