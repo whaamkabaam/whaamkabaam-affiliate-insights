@@ -39,40 +39,85 @@ async function createUser(
   serviceSuabase: any,
   { email, password, affiliate_code, is_admin }: User
 ) {
-  // Create user in auth system
-  const { data: authData, error: authError } = await serviceSuabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
-
-  if (authError) {
-    console.error(`Error creating user ${email}:`, authError)
-    return { success: false, error: authError }
-  }
-
-  const userId = authData.user.id
-
   try {
-    // If admin, add admin role
+    // Check if user already exists (by email)
+    const { data: existingUsers, error: checkError } = await serviceSuabase.auth.admin.listUsers();
+    
+    if (checkError) {
+      console.error(`Error checking existing users:`, checkError);
+      return { success: false, error: checkError };
+    }
+    
+    const userExists = existingUsers.users.some(u => u.email === email);
+    
+    // If user exists, return success but with a message
+    if (userExists) {
+      console.log(`User ${email} already exists`);
+      return { 
+        success: true,
+        exists: true,
+        user: { email, password: "already-exists" }
+      };
+    }
+
+    // Create user in auth system
+    const { data: authData, error: authError } = await serviceSuabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      console.error(`Error creating user ${email}:`, authError);
+      return { success: false, error: authError };
+    }
+
+    const userId = authData.user.id;
+    console.log(`Created user ${email} with ID ${userId}`);
+
+    // Create profile entry
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        full_name: email.split('@')[0].toUpperCase(),
+        display_name: email.split('@')[0]
+      });
+
+    if (profileError) {
+      console.error(`Error creating profile for ${email}:`, profileError);
+      // Continue anyway, profile is not critical
+    }
+
+    // If admin, add admin role through the affiliate table with high commission rate
     if (is_admin) {
-      await supabase.from('user_roles').insert({
-        user_id: userId,
-        role: 'admin',
-      })
+      const { error: adminError } = await supabase
+        .from('affiliates')
+        .insert({
+          user_id: userId,
+          affiliate_code: 'admin',
+          commission_rate: 0.5, // 50% commission indicates admin role
+        });
+
+      if (adminError) {
+        console.error(`Error setting admin role for ${email}:`, adminError);
+        return { success: false, error: adminError };
+      }
     } else {
-      // If not admin, it's an affiliate
-      await supabase.from('user_roles').insert({
-        user_id: userId,
-        role: 'affiliate',
-      })
-      
-      // Add affiliate record
+      // If not admin, it's a regular affiliate
       if (affiliate_code) {
-        await supabase.from('affiliates').insert({
-          id: userId,
-          affiliate_code,
-        })
+        const { error: affiliateError } = await supabase
+          .from('affiliates')
+          .insert({
+            user_id: userId,
+            affiliate_code,
+            commission_rate: 0.1, // 10% commission for regular affiliates
+          });
+
+        if (affiliateError) {
+          console.error(`Error creating affiliate for ${email}:`, affiliateError);
+          return { success: false, error: affiliateError };
+        }
       }
     }
 
@@ -85,39 +130,42 @@ async function createUser(
         affiliate_code, 
         is_admin 
       } 
-    }
+    };
   } catch (error) {
-    console.error(`Error setting up user ${email}:`, error)
-    return { success: false, error }
+    console.error(`Unexpected error setting up user ${email}:`, error);
+    return { success: false, error };
   }
 }
 
 Deno.serve(async (req) => {
+  console.log(`Request received: ${req.method} ${req.url}`);
+  
   // Handle CORS
-  const corsResponse = handleCors(req)
-  if (corsResponse) return corsResponse
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   // Get environment variables
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+    console.error('Missing required environment variables');
     return new Response(
       JSON.stringify({ error: 'Missing Supabase environment variables' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    );
   }
 
   // Create Supabase clients
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
-  const serviceSuabase = createClient(supabaseUrl, supabaseServiceKey)
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const serviceSuabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // Define passwords for all users
-  const ayoubPassword = generateRandomPassword()
-  const nicPassword = generateRandomPassword()
-  const maruPassword = generateRandomPassword()
-  const adminPassword = generateRandomPassword()
+  const ayoubPassword = generateRandomPassword();
+  const nicPassword = generateRandomPassword();
+  const maruPassword = generateRandomPassword();
+  const adminPassword = generateRandomPassword(10); // Slightly shorter for admin to be more memorable
 
   // Create all users
   const users: User[] = [
@@ -125,18 +173,24 @@ Deno.serve(async (req) => {
     { email: 'nic@whaamkabaam.com', password: nicPassword, affiliate_code: 'nic', is_admin: false },
     { email: 'maru@whaamkabaam.com', password: maruPassword, affiliate_code: 'maru', is_admin: false },
     { email: 'admin@whaamkabaam.com', password: adminPassword, is_admin: true },
-  ]
+  ];
 
-  const results = []
+  console.log(`Starting to create ${users.length} users`);
+  
+  const results = [];
   for (const user of users) {
-    const result = await createUser(supabase, serviceSuabase, user)
+    console.log(`Processing user: ${user.email}`);
+    const result = await createUser(supabase, serviceSuabase, user);
     results.push({
       email: user.email,
       success: result.success,
       password: result.success ? user.password : undefined,
+      exists: result.exists || false,
       error: result.success ? undefined : result.error,
-    })
+    });
   }
+
+  console.log(`Creation process completed with results:`, results);
 
   return new Response(
     JSON.stringify({
@@ -144,5 +198,5 @@ Deno.serve(async (req) => {
       results,
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  )
+  );
 })
