@@ -19,13 +19,13 @@ interface SetupResponse {
   results: UserResult[];
 }
 
-export function InitializeUsers() {
+export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean }) {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<UserResult[] | null>(null);
   const { isAdmin } = useAuth();
 
   const handleSetupUsers = async () => {
-    if (!isAdmin) {
+    if (!isAdmin && !isLoginPage) {
       toast.error("Only admins can initialize users");
       return;
     }
@@ -53,7 +53,7 @@ export function InitializeUsers() {
   };
 
   return (
-    <Card className="w-full">
+    <Card className={isLoginPage ? "w-full max-w-md mx-auto mt-4" : "w-full"}>
       <CardHeader>
         <CardTitle>Initialize Users</CardTitle>
         <CardDescription>
@@ -117,7 +117,7 @@ export function InitializeUsers() {
         {!results && (
           <Button 
             onClick={handleSetupUsers} 
-            disabled={isLoading || !isAdmin}
+            disabled={isLoading || (!isAdmin && !isLoginPage)}
             className="w-full"
           >
             {isLoading ? (
