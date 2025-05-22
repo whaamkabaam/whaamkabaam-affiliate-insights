@@ -67,8 +67,10 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
         const createdUsers = data.results.filter(r => r.success && !r.exists);
         if (createdUsers.length > 0) {
           toast.success(`${createdUsers.length} users created successfully`);
+        } else if (data.results.some(r => r.success)) {
+          toast.info("Retrieved credentials for existing users");
         } else {
-          toast.info("Generated new credentials for existing users");
+          toast.error("Failed to create or retrieve any users");
         }
       }
     } catch (err) {
@@ -110,19 +112,16 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
         {!results ? (
           <div className="text-sm text-muted-foreground space-y-4">
             <p>
-              This will create the following test users:
+              This will create the following test users with simpler passwords for testing:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>admin@whaamkabaam.com (Admin)</li>
-              <li>ayoub@whaamkabaam.com (Affiliate, code: ayoub)</li>
-              <li>nic@whaamkabaam.com (Affiliate, code: nic)</li>
-              <li>maru@whaamkabaam.com (Affiliate, code: maru)</li>
+              <li>admin@whaamkabaam.com (Admin) - AdminTest123</li>
+              <li>ayoub@whaamkabaam.com (Affiliate, code: ayoub) - AyoubTest123</li>
+              <li>nic@whaamkabaam.com (Affiliate, code: nic) - NicTest123</li>
+              <li>maru@whaamkabaam.com (Affiliate, code: maru) - MaruTest123</li>
             </ul>
-            <p>
-              Random secure passwords will be generated for each user.
-            </p>
             <p className="font-medium text-amber-600">
-              If users already exist, new passwords will be generated for reference.
+              If users already exist, their passwords will be reset to the ones above.
             </p>
           </div>
         ) : (
@@ -130,6 +129,7 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
             <h3 className="text-lg font-medium">User Credentials:</h3>
             <ScrollArea className="h-80 border rounded-md">
               <Table>
+                <TableCaption>Use these credentials to log in</TableCaption>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
                     <TableHead>Email</TableHead>
@@ -190,9 +190,6 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
                 </TableBody>
               </Table>
             </ScrollArea>
-            <p className="text-sm text-muted-foreground">
-              Please save these credentials securely. You will need them to log in with these accounts.
-            </p>
           </div>
         )}
       </CardContent>

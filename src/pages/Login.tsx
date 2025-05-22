@@ -17,8 +17,10 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-black to-gray-900 p-4">
+      {/* Set pointer-events-none to prevent the background from interfering with form interactions */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-brand-red/20 to-transparent opacity-20 pointer-events-none" />
       
+      {/* Set z-index to ensure form elements are on top and interactive */}
       <div className="w-full max-w-md space-y-8 relative z-10">
         <LoginForm />
         <InitializeUsers isLoginPage={true} />

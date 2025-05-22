@@ -54,7 +54,7 @@ async function createUser(
     
     // If user exists, return success but with the generated password for reference
     if (existingUser) {
-      console.log(`User ${email} already exists`);
+      console.log(`User ${email} already exists. Returning generated password for reference.`);
       return { 
         success: true,
         exists: true,
@@ -64,11 +64,15 @@ async function createUser(
       };
     }
 
-    // Create user in auth system
+    // Create user in auth system with explicit data
     const { data: authData, error: authError } = await serviceSuabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: {
+        is_admin: is_admin,
+        affiliate_code: affiliate_code || null
+      }
     });
 
     if (authError) {
@@ -146,6 +150,12 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
+  // Log environment variables (but don't expose them)
+  console.log('Checking environment variables availability:');
+  console.log('SUPABASE_URL available:', !!Deno.env.get('SUPABASE_URL'));
+  console.log('SUPABASE_ANON_KEY available:', !!Deno.env.get('SUPABASE_ANON_KEY'));
+  console.log('SUPABASE_SERVICE_ROLE_KEY available:', !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+
   // Get environment variables
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -172,11 +182,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const serviceSuabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Define passwords for all users
-  const ayoubPassword = generateRandomPassword();
-  const nicPassword = generateRandomPassword();
-  const maruPassword = generateRandomPassword();
-  const adminPassword = generateRandomPassword(10); // Slightly shorter for admin to be more memorable
+  // Define passwords for all users - simpler passwords for testing
+  // Use simpler passwords for testing to avoid special character issues
+  const ayoubPassword = "AyoubTest123";
+  const nicPassword = "NicTest123";
+  const maruPassword = "MaruTest123";
+  const adminPassword = "AdminTest123";
+
+  // Log what we're about to do
+  console.log("Generated test passwords:");
+  console.log(`Admin: ${adminPassword}`);
+  console.log(`Ayoub: ${ayoubPassword}`);
+  console.log(`Nic: ${nicPassword}`);
+  console.log(`Maru: ${maruPassword}`);
 
   // Create all users
   const users: User[] = [

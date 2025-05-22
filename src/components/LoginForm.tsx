@@ -62,6 +62,7 @@ export function LoginForm() {
               required
               placeholder="email@whaamkabaam.com"
               autoComplete="email"
+              className="focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div className="space-y-2">
@@ -81,6 +82,7 @@ export function LoginForm() {
               required
               placeholder="••••••••"
               autoComplete="current-password"
+              className="focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <Button 
