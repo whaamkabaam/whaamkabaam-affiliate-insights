@@ -10,12 +10,17 @@ export interface UserWithRole extends User {
   name?: string;
 }
 
+// Updated the return type of login function to match what Supabase actually returns
 interface AuthContextType {
   user: UserWithRole | null;
   session: Session | null;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{
+    user: User | null;
+    session: Session | null;
+    weakPassword?: unknown | null;
+  }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;

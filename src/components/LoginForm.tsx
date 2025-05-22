@@ -22,7 +22,7 @@ export function LoginForm() {
       return;
     }
     
-    console.log(`Attempting login with email: ${email} and password: ${password.replace(/./g, '*')}`);
+    console.log(`Attempting login with email: ${email}`);
     
     try {
       await login(email, password);
