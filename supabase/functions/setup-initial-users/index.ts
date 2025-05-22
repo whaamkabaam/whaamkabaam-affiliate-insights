@@ -56,7 +56,8 @@ async function createUser(
       return { 
         success: true,
         exists: true,
-        user: { email, password: "already-exists" }
+        email,
+        password: "already-exists"
       };
     }
 
@@ -123,13 +124,11 @@ async function createUser(
 
     return { 
       success: true, 
-      user: { 
-        id: userId, 
-        email, 
-        password, 
-        affiliate_code, 
-        is_admin 
-      } 
+      email,
+      password,
+      userId,
+      affiliate_code, 
+      is_admin
     };
   } catch (error) {
     console.error(`Unexpected error setting up user ${email}:`, error);
@@ -152,10 +151,19 @@ Deno.serve(async (req) => {
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
     console.error('Missing required environment variables');
     return new Response(
-      JSON.stringify({ error: 'Missing Supabase environment variables' }),
+      JSON.stringify({ 
+        error: 'Missing Supabase environment variables',
+        envVars: {
+          url: !!supabaseUrl,
+          anonKey: !!supabaseAnonKey,
+          serviceKey: !!supabaseServiceKey
+        }
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+
+  console.log(`Creating Supabase clients with URL: ${supabaseUrl}`);
 
   // Create Supabase clients
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -196,6 +204,7 @@ Deno.serve(async (req) => {
     JSON.stringify({
       message: 'User setup process completed',
       results,
+      supabaseUrl, // Include this for debugging
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );

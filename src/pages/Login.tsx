@@ -16,10 +16,13 @@ export default function Login() {
   }, [isAuthenticated, navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-black to-gray-900 p-4 space-y-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-black to-gray-900 p-4">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-brand-red/20 to-transparent opacity-20" />
-      <LoginForm />
-      <InitializeUsers isLoginPage={true} />
+      
+      <div className="w-full max-w-md space-y-6">
+        <LoginForm />
+        <InitializeUsers isLoginPage={true} />
+      </div>
     </div>
   );
 }

@@ -5,7 +5,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Copy } from "lucide-react";
+import { Loader2, Copy, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface UserResult {
   email: string;
@@ -18,11 +27,13 @@ interface UserResult {
 interface SetupResponse {
   message: string;
   results: UserResult[];
+  supabaseUrl?: string;
 }
 
 export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean }) {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<UserResult[] | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const { isAdmin } = useAuth();
 
   const handleSetupUsers = async () => {
@@ -42,8 +53,16 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
       }
       
       if (data) {
+        console.log("Supabase function response:", data);
         setResults(data.results);
-        toast.success("Users created successfully");
+        
+        // Check if any users were actually created (not just existing)
+        const createdUsers = data.results.filter(r => r.success && !r.exists);
+        if (createdUsers.length > 0) {
+          toast.success(`${createdUsers.length} users created successfully`);
+        } else {
+          toast.info("All users already exist in the system");
+        }
       }
     } catch (err) {
       console.error("Error:", err);
@@ -55,8 +74,15 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
 
   const copyCredentials = (email: string, password: string) => {
     const text = `Email: ${email}\nPassword: ${password}`;
-    navigator.clipboard.writeText(text);
-    toast.success(`Copied ${email} credentials to clipboard`);
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedEmail(email);
+        toast.success(`Copied ${email} credentials to clipboard`);
+        setTimeout(() => setCopiedEmail(null), 3000);
+      })
+      .catch(() => {
+        toast.error("Failed to copy to clipboard");
+      });
   };
 
   return (
@@ -86,48 +112,69 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
         ) : (
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Created Users:</h3>
-            <div className="border rounded-md overflow-x-auto max-h-80">
-              <table className="min-w-full divide-y divide-muted">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Email</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Password</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-muted">
-                  {results.map((user, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm">{user.email}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm">
-                        {user.exists ? (
-                          <span className="text-amber-600 font-medium">Already exists</span>
-                        ) : user.success ? (
-                          <span className="text-green-600 font-medium">Success</span>
-                        ) : (
-                          <span className="text-red-600 font-medium">Failed</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm font-mono">
-                        {user.exists ? 'N/A' : (user.password || 'N/A')}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        {user.password && !user.exists && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => copyCredentials(user.email, user.password!)}
-                          >
-                            <Copy className="h-4 w-4 mr-1" />
-                            Copy
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="border rounded-md overflow-hidden">
+              <div className="max-h-80 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Password</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {results.map((user, i) => (
+                      <TableRow key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                        <TableCell className="font-medium">{user.email}</TableCell>
+                        <TableCell>
+                          {user.exists ? (
+                            <span className="flex items-center text-amber-600 font-medium">
+                              <AlertTriangle className="h-4 w-4 mr-1" />
+                              Already exists
+                            </span>
+                          ) : user.success ? (
+                            <span className="flex items-center text-green-600 font-medium">
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Success
+                            </span>
+                          ) : (
+                            <span className="flex items-center text-red-600 font-medium">
+                              <AlertTriangle className="h-4 w-4 mr-1" />
+                              Failed
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {user.exists ? 'N/A' : (user.password || 'N/A')}
+                        </TableCell>
+                        <TableCell>
+                          {user.password && !user.exists && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => copyCredentials(user.email, user.password!)}
+                              className="h-8 px-2 py-0"
+                            >
+                              {copiedEmail === user.email ? (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5 mr-1" />
+                                  Copy
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground">
               Please save these credentials securely. You will need them to log in with these accounts.
