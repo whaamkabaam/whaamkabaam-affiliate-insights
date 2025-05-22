@@ -5,14 +5,10 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, Affiliate } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface Affiliate {
-  id: string;
-  affiliate_code: string;
-  commission_rate: number;
-  created_at: string;
+interface EnrichedAffiliate extends Affiliate {
   email?: string;
   total_commission?: number;
   total_sales?: number;
@@ -21,7 +17,7 @@ interface Affiliate {
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
-  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
+  const [affiliates, setAffiliates] = useState<EnrichedAffiliate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -39,56 +35,79 @@ export default function AdminDashboard() {
     const fetchAffiliates = async () => {
       try {
         setIsLoading(true);
-        // Fetch affiliates
+        // Fetch affiliates - using raw query to avoid type issues
         const { data: affiliatesData, error: affiliatesError } = await supabase
-          .from('affiliates')
-          .select('*');
+          .rpc('admin_get_affiliates').select('*');
 
-        if (affiliatesError) throw affiliatesError;
+        if (affiliatesError) {
+          console.error('Error from RPC:', affiliatesError);
+          // Fallback to direct query if RPC doesn't exist
+          const { data: directData, error: directError } = await supabase
+            .from('affiliates')
+            .select('*');
+          
+          if (directError) throw directError;
+          
+          if (directData) {
+            // Process the direct data
+            const enrichedAffiliates = await Promise.all(
+              directData.map(async (affiliate: any) => {
+                try {
+                  // Get email from profiles
+                  const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('email')
+                    .eq('id', affiliate.id)
+                    .maybeSingle();
+                  
+                  // We must use raw SQL for tables not in the auto-generated types
+                  // This is done through direct count and sum queries
+                  let totalCommission = 0;
+                  let totalSales = 0;
+                  let customerCount = 0;
+                  
+                  const { count: customers } = await supabase
+                    .from('customers')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('referred_by', affiliate.affiliate_code);
+                    
+                  customerCount = customers || 0;
 
-        // Enrich with user emails
-        const enrichedAffiliates = await Promise.all(
-          (affiliatesData || []).map(async (affiliate) => {
-            // Get email from profiles
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', affiliate.id)
-              .maybeSingle();
-            
-            // Get commission totals
-            const { data: commissionData } = await supabase
-              .from('commissions')
-              .select('amount, total_sale')
-              .eq('affiliate_id', affiliate.id);
-            
-            // Get customer count
-            const { data: customerData, count } = await supabase
-              .from('customers')
-              .select('id', { count: 'exact' })
-              .eq('referred_by', affiliate.affiliate_code);
-            
-            const totalCommission = (commissionData || []).reduce(
-              (sum, item) => sum + Number(item.amount), 
-              0
+                  // Get commission data
+                  const { data: commissionData } = await supabase
+                    .from('commissions')
+                    .select('amount, total_sale')
+                    .eq('affiliate_id', affiliate.id);
+                    
+                  if (commissionData && commissionData.length > 0) {
+                    totalCommission = commissionData.reduce((sum, item) => sum + Number(item.amount), 0);
+                    totalSales = commissionData.reduce((sum, item) => sum + Number(item.total_sale), 0);
+                  }
+                  
+                  return {
+                    ...affiliate,
+                    email: profileData?.email || 'Unknown',
+                    total_commission: totalCommission,
+                    total_sales: totalSales,
+                    customer_count: customerCount
+                  };
+                } catch (enrichError) {
+                  console.error('Error enriching affiliate data:', enrichError);
+                  return {
+                    ...affiliate, 
+                    email: 'Error loading data',
+                    total_commission: 0,
+                    total_sales: 0,
+                    customer_count: 0
+                  };
+                }
+              })
             );
-            
-            const totalSales = (commissionData || []).reduce(
-              (sum, item) => sum + Number(item.total_sale), 
-              0
-            );
-
-            return {
-              ...affiliate,
-              email: profileData?.email || 'Unknown',
-              total_commission: totalCommission,
-              total_sales: totalSales,
-              customer_count: count || 0
-            };
-          })
-        );
-
-        setAffiliates(enrichedAffiliates);
+            setAffiliates(enrichedAffiliates);
+          }
+        } else if (affiliatesData) {
+          setAffiliates(affiliatesData as EnrichedAffiliate[]);
+        }
       } catch (error: any) {
         console.error('Error fetching affiliates:', error);
         toast.error('Failed to load affiliate data');

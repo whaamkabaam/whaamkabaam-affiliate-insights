@@ -16,3 +16,40 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage
   }
 });
+
+// Helper types to work with tables missing from auto-generated types
+export type Affiliate = {
+  id: string;
+  affiliate_code: string;
+  commission_rate: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type Commission = {
+  id: string;
+  affiliate_id: string;
+  customer_id: string;
+  amount: number;
+  total_sale: number;
+  product_id?: string;
+  transaction_date: string;
+  status: string;
+  payment_id?: string;
+}
+
+export type Customer = {
+  id: string;
+  email: string;
+  referred_by: string;
+  created_at: string;
+}
+
+export type AppRole = 'admin' | 'affiliate';
+
+export type UserRole = {
+  id: string;
+  user_id: string;
+  role: AppRole;
+  created_at: string;
+}

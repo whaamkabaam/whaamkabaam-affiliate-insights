@@ -1,12 +1,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, AppRole } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
 export interface UserWithRole extends User {
-  role?: "admin" | "affiliate";
+  role?: AppRole;
   affiliateCode?: string;
+  name?: string;
 }
 
 interface AuthContextType {
@@ -32,24 +33,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to fetch additional user data like role and affiliate code
   const fetchUserData = async (userId: string) => {
     try {
-      // Check if user is admin
+      // Check if user is admin using raw query to avoid type issues
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('*')
         .eq('user_id', userId)
         .eq('role', 'admin')
         .maybeSingle();
 
       if (roleError) throw roleError;
       
-      // Get affiliate code if exists
+      // Get affiliate code if exists using raw query
       const { data: affiliateData, error: affiliateError } = await supabase
         .from('affiliates')
-        .select('affiliate_code')
+        .select('*')
         .eq('id', userId)
         .maybeSingle();
 
       if (affiliateError) throw affiliateError;
+
+      // Get user profile for name
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name, display_name')
+        .eq('id', userId)
+        .maybeSingle();
 
       // Update user with additional data
       setUser(prevUser => {
@@ -58,7 +66,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const updatedUser: UserWithRole = { 
           ...prevUser,
           role: roleData ? 'admin' : 'affiliate',
-          affiliateCode: affiliateData?.affiliate_code || undefined
+          affiliateCode: affiliateData?.affiliate_code || undefined,
+          name: profileData?.display_name || profileData?.full_name || prevUser.email?.split('@')[0] || undefined
         };
         
         return updatedUser;
@@ -73,28 +82,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user || null);
-        
-        if (session?.user) {
+      (_event, newSession) => {
+        setSession(newSession);
+        if (newSession?.user) {
+          const extendedUser = newSession.user as UserWithRole;
+          setUser(extendedUser);
+          
           // Use setTimeout to prevent Supabase authentication deadlocks
           setTimeout(() => {
-            fetchUserData(session.user.id);
+            fetchUserData(newSession.user.id);
           }, 0);
         } else {
+          setUser(null);
           setIsAdmin(false);
         }
       }
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user || null);
-      
-      if (session?.user) {
-        fetchUserData(session.user.id);
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      setSession(existingSession);
+      if (existingSession?.user) {
+        const extendedUser = existingSession.user as UserWithRole;
+        setUser(extendedUser);
+        fetchUserData(existingSession.user.id);
       }
       
       setIsLoading(false);
