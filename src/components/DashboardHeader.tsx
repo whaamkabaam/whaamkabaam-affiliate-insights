@@ -17,7 +17,9 @@ export function DashboardHeader() {
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden md:flex gap-2 text-right">
           <div className="font-semibold">{user?.name || user?.email}</div>
-          <div className="text-xs text-muted-foreground">Affiliate Code: {user?.affiliateCode}</div>
+          {user?.affiliateCode && (
+            <div className="text-xs text-muted-foreground">Affiliate Code: {user.affiliateCode}</div>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={logout}>
           Logout

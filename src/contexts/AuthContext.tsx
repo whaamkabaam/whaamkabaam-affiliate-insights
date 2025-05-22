@@ -33,15 +33,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to fetch additional user data like role and affiliate code
   const fetchUserData = async (userId: string) => {
     try {
-      // Check if user is admin using raw query to avoid type issues
+      // Check if user is admin using raw query
       const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('role', 'admin')
+        .rpc('get_user_role', { user_id: userId })
         .maybeSingle();
 
-      if (roleError) throw roleError;
+      if (roleError && roleError.message !== 'JSON object requested, multiple (or no) rows returned') {
+        console.error("Error checking admin role:", roleError);
+      }
       
       // Get affiliate code if exists using raw query
       const { data: affiliateData, error: affiliateError } = await supabase
@@ -50,7 +49,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', userId)
         .maybeSingle();
 
-      if (affiliateError) throw affiliateError;
+      if (affiliateError && affiliateError.message !== 'JSON object requested, multiple (or no) rows returned') {
+        console.error("Error fetching affiliate data:", affiliateError);
+      }
 
       // Get user profile for name
       const { data: profileData } = await supabase
@@ -65,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         const updatedUser: UserWithRole = { 
           ...prevUser,
-          role: roleData ? 'admin' : 'affiliate',
+          role: roleData?.role === 'admin' ? 'admin' : 'affiliate',
           affiliateCode: affiliateData?.affiliate_code || undefined,
           name: profileData?.display_name || profileData?.full_name || prevUser.email?.split('@')[0] || undefined
         };
@@ -73,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return updatedUser;
       });
       
-      setIsAdmin(!!roleData);
+      setIsAdmin(roleData?.role === 'admin' || false);
     } catch (err) {
       console.error("Error fetching user data:", err);
     }

@@ -53,3 +53,17 @@ export type UserRole = {
   role: AppRole;
   created_at: string;
 }
+
+// Add extension for Supabase with RPC functions to help with TypeScript errors
+declare module '@supabase/supabase-js' {
+  interface SupabaseClient<Database = any> {
+    rpc<T = any>(
+      fn: string,
+      params?: object,
+      options?: {
+        head?: boolean;
+        count?: 'exact' | 'planned' | 'estimated';
+      }
+    ): { data: T | null; error: Error | null; count: number | null; status: number | undefined };
+  }
+}

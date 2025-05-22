@@ -35,67 +35,65 @@ export default function AdminDashboard() {
     const fetchAffiliates = async () => {
       try {
         setIsLoading(true);
-        // Use raw query to avoid type issues - supabase doesn't know about our new tables
-        const { data, error } = await supabase
-          .from('affiliates')
-          .select('*');
-
-        if (error) throw error;
+        // Use raw SQL query to get affiliate data
+        const { data, error } = await supabase.rpc('admin_get_affiliates');
+        
+        if (error) {
+          console.error('Raw SQL error:', error);
           
-        if (data) {
-          // Process the direct data
-          const enrichedAffiliates = await Promise.all(
-            data.map(async (affiliate: any) => {
-              try {
-                // Get email from profiles
-                const { data: profileData } = await supabase
-                  .from('profiles')
-                  .select('email')
-                  .eq('id', affiliate.id)
-                  .maybeSingle();
-                
-                // Count the number of customers referred by this affiliate
-                const { count: customers } = await supabase
-                  .from('customers')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('referred_by', affiliate.affiliate_code);
-                  
-                const customerCount = customers || 0;
+          // Fallback to direct query if RPC function isn't available
+          const { data: directData, error: directError } = await supabase
+            .from('affiliates')
+            .select('*');
 
-                // Get commission data
-                const { data: commissionData } = await supabase
-                  .from('commissions')
-                  .select('amount, total_sale')
-                  .eq('affiliate_id', affiliate.id);
+          if (directError) throw directError;
+          
+          if (directData) {
+            // Process the direct data
+            const enrichedAffiliates = await Promise.all(
+              directData.map(async (affiliate: any) => {
+                try {
+                  // Get email from profiles
+                  const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('email')
+                    .eq('id', affiliate.id)
+                    .maybeSingle();
                   
-                let totalCommission = 0;
-                let totalSales = 0;
-                
-                if (commissionData && commissionData.length > 0) {
-                  totalCommission = commissionData.reduce((sum, item) => sum + Number(item.amount), 0);
-                  totalSales = commissionData.reduce((sum, item) => sum + Number(item.total_sale), 0);
+                  // Count the number of customers referred by this affiliate using raw query
+                  const { count: customerCount } = await supabase
+                    .rpc('count_referred_customers', { code: affiliate.affiliate_code })
+                    .single();
+                    
+                  // Get commission data using raw query
+                  const { data: commissionSummary } = await supabase
+                    .rpc('get_affiliate_commission_summary', { affiliate_id: affiliate.id })
+                    .single();
+                    
+                  return {
+                    ...affiliate,
+                    email: profileData?.email || 'Unknown',
+                    total_commission: commissionSummary?.total_commission || 0,
+                    total_sales: commissionSummary?.total_sales || 0,
+                    customer_count: customerCount || 0
+                  };
+                } catch (enrichError) {
+                  console.error('Error enriching affiliate data:', enrichError);
+                  return {
+                    ...affiliate, 
+                    email: 'Error loading data',
+                    total_commission: 0,
+                    total_sales: 0,
+                    customer_count: 0
+                  };
                 }
-                
-                return {
-                  ...affiliate,
-                  email: profileData?.email || 'Unknown',
-                  total_commission: totalCommission,
-                  total_sales: totalSales,
-                  customer_count: customerCount
-                };
-              } catch (enrichError) {
-                console.error('Error enriching affiliate data:', enrichError);
-                return {
-                  ...affiliate, 
-                  email: 'Error loading data',
-                  total_commission: 0,
-                  total_sales: 0,
-                  customer_count: 0
-                };
-              }
-            })
-          );
-          setAffiliates(enrichedAffiliates);
+              })
+            );
+            setAffiliates(enrichedAffiliates);
+          }
+        } else if (data) {
+          // If RPC function worked, use that data
+          setAffiliates(data);
         }
       } catch (error: any) {
         console.error('Error fetching affiliates:', error);
