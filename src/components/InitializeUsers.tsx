@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Get Supabase URL from the client file
+const SUPABASE_URL = "https://xfkkmkxeoqawqnvahhoe.supabase.co";
+
 interface UserResult {
   email: string;
   success: boolean;
@@ -46,7 +49,7 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
     setIsLoading(true);
     try {
       // Log the Supabase URL being used
-      console.log("Using Supabase URL:", supabase.supabaseUrl);
+      console.log("Using Supabase URL:", SUPABASE_URL);
       
       const { data, error } = await supabase.functions.invoke<SetupResponse>("setup-initial-users");
       
@@ -96,7 +99,7 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
           Initialize Users
           <div className="text-xs text-muted-foreground flex items-center">
             <Info className="h-3 w-3 mr-1" /> 
-            <span>Using {supabase.supabaseUrl}</span>
+            <span>Using {SUPABASE_URL}</span>
           </div>
         </CardTitle>
         <CardDescription>
