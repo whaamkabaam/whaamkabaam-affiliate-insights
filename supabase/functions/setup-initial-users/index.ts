@@ -16,16 +16,6 @@ interface User {
   is_admin: boolean;
 }
 
-// Generate a random password with specified length
-function generateRandomPassword(length: number = 12): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-  let password = '';
-  for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-}
-
 // Handle CORS preflight request
 function handleCors(req: Request) {
   if (req.method === 'OPTIONS') {
@@ -50,16 +40,29 @@ async function createUser(
       return { success: false, error: checkError };
     }
     
-    const existingUser = existingUsers.users.find(u => u.email === email);
+    const existingUser = existingUsers?.users?.find((u: any) => u.email === email);
     
-    // If user exists, return success but with the generated password for reference
+    // If user exists, update their password
     if (existingUser) {
-      console.log(`User ${email} already exists. Returning generated password for reference.`);
+      console.log(`User ${email} already exists. Updating password.`);
+      
+      // Update the user's password
+      const { data: updatedUser, error: updateError } = await serviceSuabase.auth.admin.updateUserById(
+        existingUser.id,
+        { password }
+      );
+      
+      if (updateError) {
+        console.error(`Error updating password for ${email}:`, updateError);
+        return { success: false, error: updateError };
+      }
+      
+      console.log(`Updated password for user ${email}`);
       return { 
         success: true,
         exists: true,
         email,
-        password, // Return the generated password even for existing users
+        password,
         userId: existingUser.id
       };
     }
@@ -149,12 +152,6 @@ Deno.serve(async (req) => {
   // Handle CORS
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
-
-  // Log environment variables (but don't expose them)
-  console.log('Checking environment variables availability:');
-  console.log('SUPABASE_URL available:', !!Deno.env.get('SUPABASE_URL'));
-  console.log('SUPABASE_ANON_KEY available:', !!Deno.env.get('SUPABASE_ANON_KEY'));
-  console.log('SUPABASE_SERVICE_ROLE_KEY available:', !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
 
   // Get environment variables
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';

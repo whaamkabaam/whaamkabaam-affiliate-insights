@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginForm } from "@/components/LoginForm";
 import { InitializeUsers } from "@/components/InitializeUsers";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, HelpCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 export default function Login() {
   const { isAuthenticated } = useAuth();
@@ -23,14 +25,13 @@ export default function Login() {
       
       {/* Set z-index to ensure form elements are on top and interactive */}
       <div className="w-full max-w-md space-y-8 relative z-10">
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-6 rounded shadow-sm">
-          <div className="flex items-center">
-            <AlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
-            <p className="text-sm text-yellow-700">
-              <strong>Demo Mode:</strong> Use the credentials below or click "Initialize Users" to create test accounts.
-            </p>
-          </div>
-        </div>
+        <Alert className="bg-yellow-100 border-l-4 border-yellow-500 mb-6 shadow-sm">
+          <AlertCircle className="h-5 w-5 text-yellow-500" />
+          <AlertTitle className="text-yellow-800 font-medium">Demo Mode</AlertTitle>
+          <AlertDescription className="text-yellow-700">
+            Use the credentials below or click "Initialize Users" to create test accounts.
+          </AlertDescription>
+        </Alert>
         
         <LoginForm />
         <InitializeUsers isLoginPage={true} />
@@ -38,14 +39,26 @@ export default function Login() {
       
       {/* Help message for demo users */}
       <div className="mt-8 text-white opacity-80 text-center max-w-md p-4 bg-black/30 rounded-lg border border-white/10 backdrop-blur-sm">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <HelpCircle className="h-5 w-5" />
+          <h3 className="font-medium">Demo Credentials</h3>
+        </div>
         <p className="text-sm">
-          <strong>Demo Credentials:</strong><br />
-          Email: admin@whaamkabaam.com<br />
-          Password: AdminTest123
+          <strong>Admin:</strong> admin@whaamkabaam.com / AdminTest123<br />
+          <strong>Affiliate:</strong> ayoub@whaamkabaam.com / AyoubTest123
         </p>
-        <p className="mt-2 text-xs text-white/70">
-          If you encounter login issues, click "Initialize Users" button below the form to reset the test accounts.
-        </p>
+        <div className="mt-4 flex justify-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs bg-white/10 hover:bg-white/20 border-white/20"
+            onClick={() => {
+              navigator.clipboard.writeText('admin@whaamkabaam.com\nAdminTest123');
+            }}
+          >
+            Copy Admin Credentials
+          </Button>
+        </div>
       </div>
     </div>
   );
