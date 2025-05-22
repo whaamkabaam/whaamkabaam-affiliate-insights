@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "./Logo";
+import { toast } from "sonner";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -15,6 +16,7 @@ export function LoginForm() {
     e.preventDefault();
     try {
       await login(email, password);
+      toast.success("Login successful");
     } catch (err) {
       // Error is handled in the AuthContext
     }
@@ -50,7 +52,7 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="nic@example.com"
+              placeholder="email@whaamkabaam.com"
             />
           </div>
           <div className="space-y-2">

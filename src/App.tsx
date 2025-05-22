@@ -11,6 +11,7 @@ import Analytics from "./pages/Analytics";
 import Customers from "./pages/Customers";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AffiliateProvider } from "./contexts/AffiliateContext";
@@ -18,8 +19,8 @@ import { AffiliateProvider } from "./contexts/AffiliateContext";
 const queryClient = new QueryClient();
 
 // Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) => {
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -31,6 +32,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (adminOnly && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -45,6 +50,7 @@ const AppRoutes = () => (
     <Route path="/dashboard/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
     <Route path="/dashboard/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
     <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+    <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminDashboard /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

@@ -1,68 +1,106 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Session, User } from "@supabase/supabase-js";
+import { toast } from "sonner";
 
-export interface User {
-  id: string;
-  email: string;
-  name?: string;
-  affiliateCode: string;
+export interface UserWithRole extends User {
+  role?: "admin" | "affiliate";
+  affiliateCode?: string;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: UserWithRole | null;
+  session: Session | null;
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration purposes
-const MOCK_USERS = [
-  {
-    id: "1",
-    email: "nic@example.com",
-    password: "password123",
-    name: "Nicolas",
-    affiliateCode: "nic",
-  },
-  {
-    id: "2",
-    email: "maru@example.com",
-    password: "password123",
-    name: "Maru",
-    affiliateCode: "maru",
-  },
-  {
-    id: "3",
-    email: "ayoub@example.com",
-    password: "password123",
-    name: "Ayoub",
-    affiliateCode: "ayoub",
-  },
-];
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserWithRole | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Check for existing session on load
-  useEffect(() => {
-    const savedUser = localStorage.getItem("whaamkabaam_user");
-    
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (err) {
-        console.error("Failed to parse user from localStorage", err);
-        localStorage.removeItem("whaamkabaam_user");
-      }
+  // Function to fetch additional user data like role and affiliate code
+  const fetchUserData = async (userId: string) => {
+    try {
+      // Check if user is admin
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (roleError) throw roleError;
+      
+      // Get affiliate code if exists
+      const { data: affiliateData, error: affiliateError } = await supabase
+        .from('affiliates')
+        .select('affiliate_code')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (affiliateError) throw affiliateError;
+
+      // Update user with additional data
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        
+        const updatedUser: UserWithRole = { 
+          ...prevUser,
+          role: roleData ? 'admin' : 'affiliate',
+          affiliateCode: affiliateData?.affiliate_code || undefined
+        };
+        
+        return updatedUser;
+      });
+      
+      setIsAdmin(!!roleData);
+    } catch (err) {
+      console.error("Error fetching user data:", err);
     }
-    
-    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setUser(session?.user || null);
+        
+        if (session?.user) {
+          // Use setTimeout to prevent Supabase authentication deadlocks
+          setTimeout(() => {
+            fetchUserData(session.user.id);
+          }, 0);
+        } else {
+          setIsAdmin(false);
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user || null);
+      
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      }
+      
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -70,38 +108,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      // Mock authentication - in production, this would be a real API call
-      const user = MOCK_USERS.find(
-        (u) => u.email === email && u.password === password
-      );
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      if (!user) {
-        throw new Error("Invalid email or password");
-      }
-      
-      const { password: _, ...userWithoutPassword } = user;
-      setUser(userWithoutPassword);
-      localStorage.setItem("whaamkabaam_user", JSON.stringify(userWithoutPassword));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err.message || "Login failed");
+      toast.error(err.message || "Login failed");
       throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("whaamkabaam_user");
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+    } catch (err: any) {
+      console.error("Logout error:", err.message);
+      toast.error("Failed to log out");
+    }
   };
 
   const value = {
     user,
+    session,
     isLoading,
     error,
     login,
     logout,
     isAuthenticated: !!user,
+    isAdmin
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

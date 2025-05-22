@@ -1,14 +1,25 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, isAdmin } = useAuth();
 
   useEffect(() => {
-    // Redirect to login page
-    navigate("/login");
-  }, [navigate]);
+    if (isAuthenticated) {
+      // Redirect admins to admin dashboard, others to regular dashboard
+      if (isAdmin) {
+        navigate("/admin");
+      } else {
+        navigate("/dashboard");
+      }
+    } else {
+      // Not authenticated, redirect to login
+      navigate("/login");
+    }
+  }, [navigate, isAuthenticated, isAdmin]);
 
   return null;
 };

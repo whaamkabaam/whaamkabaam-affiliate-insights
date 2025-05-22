@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -106,7 +105,12 @@ export default function Analytics() {
                         <XAxis dataKey="day" />
                         <YAxis />
                         <Tooltip 
-                          formatter={(value) => [`$${value}`, "Commission"]}
+                          formatter={(value) => {
+                            if (typeof value === 'number') {
+                              return `$${value.toFixed(2)}`;
+                            }
+                            return `$${value}`;
+                          }}
                           labelFormatter={(label) => `Day ${label}`}
                         />
                         <Legend />
@@ -138,7 +142,12 @@ export default function Analytics() {
                           ))}
                         </Pie>
                         <Tooltip 
-                          formatter={(value) => [`$${value.toFixed(2)}`, "Revenue"]}
+                          formatter={(value) => {
+                            if (typeof value === 'number') {
+                              return `$${value.toFixed(2)}`;
+                            }
+                            return `$${value}`;
+                          }}
                         />
                         <Legend />
                       </PieChart>
