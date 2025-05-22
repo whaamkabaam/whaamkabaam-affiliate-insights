@@ -9,8 +9,8 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
-  const [email, setEmail] = useState("admin@whaamkabaam.com");
-  const [password, setPassword] = useState("AdminTest123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const { login, isLoading, error } = useAuth();

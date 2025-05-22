@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginForm } from "@/components/LoginForm";
 import { InitializeUsers } from "@/components/InitializeUsers";
-import { AlertCircle, HelpCircle } from "lucide-react";
+import { AlertCircle, HelpCircle, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
@@ -29,7 +29,7 @@ export default function Login() {
           <AlertCircle className="h-5 w-5 text-yellow-500" />
           <AlertTitle className="text-yellow-800 font-medium">Demo Mode</AlertTitle>
           <AlertDescription className="text-yellow-700">
-            Use the credentials below or click "Initialize Users" to create test accounts.
+            Click "Initialize Users" below to create test accounts before logging in.
           </AlertDescription>
         </Alert>
         
@@ -43,11 +43,15 @@ export default function Login() {
           <HelpCircle className="h-5 w-5" />
           <h3 className="font-medium">Demo Credentials</h3>
         </div>
-        <p className="text-sm">
+        <p className="text-sm mb-2">
           <strong>Admin:</strong> admin@whaamkabaam.com / AdminTest123<br />
           <strong>Affiliate:</strong> ayoub@whaamkabaam.com / AyoubTest123
         </p>
-        <div className="mt-4 flex justify-center">
+        <div className="flex items-center justify-center text-xs text-amber-300">
+          <Info className="h-3 w-3 mr-1" />
+          <span>Be sure to initialize users before attempting to log in</span>
+        </div>
+        <div className="mt-4 flex justify-center gap-2">
           <Button 
             variant="outline" 
             size="sm" 
@@ -57,6 +61,16 @@ export default function Login() {
             }}
           >
             Copy Admin Credentials
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs bg-white/10 hover:bg-white/20 border-white/20"
+            onClick={() => {
+              navigator.clipboard.writeText('ayoub@whaamkabaam.com\nAyoubTest123');
+            }}
+          >
+            Copy Affiliate Credentials
           </Button>
         </div>
       </div>
