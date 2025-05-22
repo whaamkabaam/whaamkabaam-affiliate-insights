@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Get Supabase URL from the client file
+// Define the Supabase URL constant
 const SUPABASE_URL = "https://xfkkmkxeoqawqnvahhoe.supabase.co";
 
 interface UserResult {

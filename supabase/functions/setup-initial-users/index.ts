@@ -40,6 +40,8 @@ async function createUser(
   { email, password, affiliate_code, is_admin }: User
 ) {
   try {
+    console.log(`Processing user: ${email}`);
+    
     // Check if user already exists (by email)
     const { data: existingUsers, error: checkError } = await serviceSuabase.auth.admin.listUsers();
     
