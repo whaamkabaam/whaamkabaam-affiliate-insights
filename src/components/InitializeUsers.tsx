@@ -68,7 +68,7 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
         if (createdUsers.length > 0) {
           toast.success(`${createdUsers.length} users created successfully`);
         } else {
-          toast.info("All users already exist in the system");
+          toast.info("Generated new credentials for existing users");
         }
       }
     } catch (err) {
@@ -121,10 +121,13 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
             <p>
               Random secure passwords will be generated for each user.
             </p>
+            <p className="font-medium text-amber-600">
+              If users already exist, new passwords will be generated for reference.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Created Users:</h3>
+            <h3 className="text-lg font-medium">User Credentials:</h3>
             <ScrollArea className="h-80 border rounded-md">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
@@ -158,10 +161,10 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs whitespace-normal break-all">
-                        {user.exists ? 'N/A' : (user.password || 'N/A')}
+                        {user.password || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        {user.password && !user.exists && (
+                        {user.password && (
                           <Button 
                             variant="outline" 
                             size="sm" 

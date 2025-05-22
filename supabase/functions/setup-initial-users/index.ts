@@ -48,16 +48,17 @@ async function createUser(
       return { success: false, error: checkError };
     }
     
-    const userExists = existingUsers.users.some(u => u.email === email);
+    const existingUser = existingUsers.users.find(u => u.email === email);
     
-    // If user exists, return success but with a message
-    if (userExists) {
+    // If user exists, return success but with the generated password for reference
+    if (existingUser) {
       console.log(`User ${email} already exists`);
       return { 
         success: true,
         exists: true,
         email,
-        password: "already-exists"
+        password, // Return the generated password even for existing users
+        userId: existingUser.id
       };
     }
 
