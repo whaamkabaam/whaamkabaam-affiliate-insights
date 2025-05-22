@@ -68,12 +68,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ...prevUser,
           role: roleData?.role === 'admin' ? 'admin' : 'affiliate',
           affiliateCode: affiliateData?.affiliate_code || undefined,
-          name: profileData?.display_name || profileData?.full_name || prevUser.email?.split('@')[0] || undefined
+          name: profileData?.full_name || profileData?.display_name || prevUser.email?.split('@')[0] || undefined
         };
         
         return updatedUser;
       });
       
+      // Use null coalescing for safe access
       setIsAdmin(roleData?.role === 'admin' || false);
     } catch (err) {
       console.error("Error fetching user data:", err);
