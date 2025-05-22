@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Copy, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Copy, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface UserResult {
   email: string;
@@ -44,6 +45,9 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
     
     setIsLoading(true);
     try {
+      // Log the Supabase URL being used
+      console.log("Using Supabase URL:", supabase.supabaseUrl);
+      
       const { data, error } = await supabase.functions.invoke<SetupResponse>("setup-initial-users");
       
       if (error) {
@@ -88,7 +92,13 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
   return (
     <Card className={isLoginPage ? "w-full max-w-md mx-auto mt-4" : "w-full"}>
       <CardHeader>
-        <CardTitle>Initialize Users</CardTitle>
+        <CardTitle className="flex items-center justify-between">
+          Initialize Users
+          <div className="text-xs text-muted-foreground flex items-center">
+            <Info className="h-3 w-3 mr-1" /> 
+            <span>Using {supabase.supabaseUrl}</span>
+          </div>
+        </CardTitle>
         <CardDescription>
           Set up initial users for testing the application
         </CardDescription>
@@ -112,70 +122,68 @@ export function InitializeUsers({ isLoginPage = false }: { isLoginPage?: boolean
         ) : (
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Created Users:</h3>
-            <div className="border rounded-md overflow-hidden">
-              <div className="max-h-80 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Password</TableHead>
-                      <TableHead>Actions</TableHead>
+            <ScrollArea className="h-80 border rounded-md">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Password</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {results.map((user, i) => (
+                    <TableRow key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      <TableCell className="font-medium">{user.email}</TableCell>
+                      <TableCell>
+                        {user.exists ? (
+                          <span className="flex items-center text-amber-600 font-medium">
+                            <AlertTriangle className="h-4 w-4 mr-1" />
+                            Already exists
+                          </span>
+                        ) : user.success ? (
+                          <span className="flex items-center text-green-600 font-medium">
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            Success
+                          </span>
+                        ) : (
+                          <span className="flex items-center text-red-600 font-medium">
+                            <AlertTriangle className="h-4 w-4 mr-1" />
+                            Failed
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-normal break-all">
+                        {user.exists ? 'N/A' : (user.password || 'N/A')}
+                      </TableCell>
+                      <TableCell>
+                        {user.password && !user.exists && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => copyCredentials(user.email, user.password!)}
+                            className="h-8 px-2 py-0"
+                          >
+                            {copiedEmail === user.email ? (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5 mr-1" />
+                                Copy
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {results.map((user, i) => (
-                      <TableRow key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                        <TableCell className="font-medium">{user.email}</TableCell>
-                        <TableCell>
-                          {user.exists ? (
-                            <span className="flex items-center text-amber-600 font-medium">
-                              <AlertTriangle className="h-4 w-4 mr-1" />
-                              Already exists
-                            </span>
-                          ) : user.success ? (
-                            <span className="flex items-center text-green-600 font-medium">
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Success
-                            </span>
-                          ) : (
-                            <span className="flex items-center text-red-600 font-medium">
-                              <AlertTriangle className="h-4 w-4 mr-1" />
-                              Failed
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {user.exists ? 'N/A' : (user.password || 'N/A')}
-                        </TableCell>
-                        <TableCell>
-                          {user.password && !user.exists && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => copyCredentials(user.email, user.password!)}
-                              className="h-8 px-2 py-0"
-                            >
-                              {copiedEmail === user.email ? (
-                                <>
-                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                  Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3.5 w-3.5 mr-1" />
-                                  Copy
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
             <p className="text-sm text-muted-foreground">
               Please save these credentials securely. You will need them to log in with these accounts.
             </p>
