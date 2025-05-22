@@ -60,9 +60,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('profiles')
         .select('full_name, display_name')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (profileError && profileError.message !== 'No rows found') {
+      if (profileError) {
         console.error("Error fetching profile data:", profileError);
       } else {
         console.log("Profile data:", profileData);
@@ -90,7 +90,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return updatedUser;
       });
       
-      // Use null coalescing for safe access
       setIsAdmin(roleData === 'admin');
     } catch (err) {
       console.error("Error fetching user data:", err);
@@ -102,8 +101,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        console.log("Auth state changed, event:", _event);
+      async (event, newSession) => {
+        console.log("Auth state changed, event:", event);
         setSession(newSession);
         
         if (newSession?.user) {
@@ -132,7 +131,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log("Found existing session for user:", existingSession.user.email);
         const extendedUser = existingSession.user as UserWithRole;
         setUser(extendedUser);
-        fetchUserData(existingSession.user.id);
+        
+        setTimeout(() => {
+          fetchUserData(existingSession.user.id);
+        }, 0);
       } else {
         console.log("No existing session found");
       }
@@ -161,12 +163,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error;
       }
       
-      console.log("Login successful", data);
-      
+      console.log("Login successful:", data);
+      return data;
     } catch (err: any) {
       console.error("Login exception:", err);
+      
+      // Try to initialize users automatically if login fails
+      if (email === "admin@whaamkabaam.com" && password === "AdminTest123") {
+        try {
+          console.log("Attempting to initialize users via edge function...");
+          const { data: initData, error: initError } = await supabase.functions.invoke<any>("setup-initial-users");
+          
+          if (initError) {
+            console.error("Error initializing users:", initError);
+          } else if (initData) {
+            console.log("Users initialized:", initData);
+            toast.info("Created test users. Please try logging in again.");
+            setError("Users initialized. Please try logging in again.");
+            throw new Error("Users initialized. Please try logging in again.");
+          }
+        } catch (initErr) {
+          console.error("Error during user initialization:", initErr);
+        }
+      }
+      
       setError(err.message || "Login failed");
-      toast.error(err.message || "Login failed");
       throw err;
     } finally {
       setIsLoading(false);
@@ -179,6 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setSession(null);
       setIsAdmin(false);
+      toast.success("Successfully logged out");
     } catch (err: any) {
       console.error("Logout error:", err.message);
       toast.error("Failed to log out");

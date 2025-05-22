@@ -13,6 +13,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className
         )}
         ref={ref}
+        style={{ zIndex: 20 }} // Ensure input is clickable
         {...props}
       />
     )

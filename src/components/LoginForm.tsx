@@ -9,8 +9,8 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("admin@whaamkabaam.com");
+  const [password, setPassword] = useState("AdminTest123");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuth();
 
@@ -22,13 +22,13 @@ export function LoginForm() {
       return;
     }
     
+    console.log(`Attempting login with email: ${email} and password: ${password.replace(/./g, '*')}`);
+    
     try {
-      console.log(`Attempting login with email: ${email}`);
       await login(email, password);
       toast.success("Login successful");
     } catch (err: any) {
-      // Error is also handled in the AuthContext, but we can add more specific feedback here
-      console.error("Login error:", err);
+      console.error("Login form error:", err);
       toast.error(err?.message || "Login failed. Please check your credentials.");
     }
   };
