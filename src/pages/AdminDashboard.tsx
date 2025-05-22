@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -7,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { supabase, AffiliateJson } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { InitializeUsers } from "@/components/InitializeUsers";
 
 interface EnrichedAffiliate {
   id: string;
@@ -87,64 +87,54 @@ export default function AdminDashboard() {
   }, [isAuthenticated, isAdmin, navigate]);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-muted/40">
       <Sidebar />
       <div className="flex-1">
         <DashboardHeader />
-        <main className="flex-1 p-4 md:p-6 space-y-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Admin Dashboard</h1>
-            <p className="text-muted-foreground">
-              Overview of all affiliate performance
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Affiliate Performance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center p-6">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-red"></div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Affiliate</th>
-                        <th className="text-left p-2">Email</th>
-                        <th className="text-left p-2">Code</th>
-                        <th className="text-right p-2">Commission Rate</th>
-                        <th className="text-right p-2">Total Sales</th>
-                        <th className="text-right p-2">Total Commission</th>
-                        <th className="text-right p-2">Customers</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {affiliates.map((affiliate) => (
-                        <tr key={affiliate.id} className="border-b hover:bg-muted/50">
-                          <td className="p-2">Affiliate {affiliate.affiliate_code}</td>
-                          <td className="p-2">{affiliate.email}</td>
-                          <td className="p-2">{affiliate.affiliate_code}</td>
-                          <td className="text-right p-2">{(Number(affiliate.commission_rate) * 100).toFixed(0)}%</td>
-                          <td className="text-right p-2">${affiliate.total_sales?.toFixed(2) || '0.00'}</td>
-                          <td className="text-right p-2">${affiliate.total_commission?.toFixed(2) || '0.00'}</td>
-                          <td className="text-right p-2">{affiliate.customer_count || 0}</td>
-                        </tr>
-                      ))}
-                      {affiliates.length === 0 && (
+        <main className="grid gap-6 p-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Admin Dashboard</h1>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <InitializeUsers />
+            
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle>Affiliates</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : affiliates.length > 0 ? (
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-muted">
+                      <thead className="bg-muted/50">
                         <tr>
-                          <td colSpan={7} className="text-center p-4">No affiliates found</td>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Email</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Code</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Commission</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-muted">
+                        {affiliates.map((affiliate, i) => (
+                          <tr key={affiliate.id} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm">{affiliate.email}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm">{affiliate.affiliate_code}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm">{(affiliate.commission_rate * 100).toFixed(0)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No affiliates found. Use the Initialize Users function to create test affiliates.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </main>
       </div>
     </div>
