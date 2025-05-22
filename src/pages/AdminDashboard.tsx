@@ -35,78 +35,67 @@ export default function AdminDashboard() {
     const fetchAffiliates = async () => {
       try {
         setIsLoading(true);
-        // Fetch affiliates - using raw query to avoid type issues
-        const { data: affiliatesData, error: affiliatesError } = await supabase
-          .rpc('admin_get_affiliates').select('*');
+        // Use raw query to avoid type issues - supabase doesn't know about our new tables
+        const { data, error } = await supabase
+          .from('affiliates')
+          .select('*');
 
-        if (affiliatesError) {
-          console.error('Error from RPC:', affiliatesError);
-          // Fallback to direct query if RPC doesn't exist
-          const { data: directData, error: directError } = await supabase
-            .from('affiliates')
-            .select('*');
+        if (error) throw error;
           
-          if (directError) throw directError;
-          
-          if (directData) {
-            // Process the direct data
-            const enrichedAffiliates = await Promise.all(
-              directData.map(async (affiliate: any) => {
-                try {
-                  // Get email from profiles
-                  const { data: profileData } = await supabase
-                    .from('profiles')
-                    .select('email')
-                    .eq('id', affiliate.id)
-                    .maybeSingle();
+        if (data) {
+          // Process the direct data
+          const enrichedAffiliates = await Promise.all(
+            data.map(async (affiliate: any) => {
+              try {
+                // Get email from profiles
+                const { data: profileData } = await supabase
+                  .from('profiles')
+                  .select('email')
+                  .eq('id', affiliate.id)
+                  .maybeSingle();
+                
+                // Count the number of customers referred by this affiliate
+                const { count: customers } = await supabase
+                  .from('customers')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('referred_by', affiliate.affiliate_code);
                   
-                  // We must use raw SQL for tables not in the auto-generated types
-                  // This is done through direct count and sum queries
-                  let totalCommission = 0;
-                  let totalSales = 0;
-                  let customerCount = 0;
-                  
-                  const { count: customers } = await supabase
-                    .from('customers')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('referred_by', affiliate.affiliate_code);
-                    
-                  customerCount = customers || 0;
+                const customerCount = customers || 0;
 
-                  // Get commission data
-                  const { data: commissionData } = await supabase
-                    .from('commissions')
-                    .select('amount, total_sale')
-                    .eq('affiliate_id', affiliate.id);
-                    
-                  if (commissionData && commissionData.length > 0) {
-                    totalCommission = commissionData.reduce((sum, item) => sum + Number(item.amount), 0);
-                    totalSales = commissionData.reduce((sum, item) => sum + Number(item.total_sale), 0);
-                  }
+                // Get commission data
+                const { data: commissionData } = await supabase
+                  .from('commissions')
+                  .select('amount, total_sale')
+                  .eq('affiliate_id', affiliate.id);
                   
-                  return {
-                    ...affiliate,
-                    email: profileData?.email || 'Unknown',
-                    total_commission: totalCommission,
-                    total_sales: totalSales,
-                    customer_count: customerCount
-                  };
-                } catch (enrichError) {
-                  console.error('Error enriching affiliate data:', enrichError);
-                  return {
-                    ...affiliate, 
-                    email: 'Error loading data',
-                    total_commission: 0,
-                    total_sales: 0,
-                    customer_count: 0
-                  };
+                let totalCommission = 0;
+                let totalSales = 0;
+                
+                if (commissionData && commissionData.length > 0) {
+                  totalCommission = commissionData.reduce((sum, item) => sum + Number(item.amount), 0);
+                  totalSales = commissionData.reduce((sum, item) => sum + Number(item.total_sale), 0);
                 }
-              })
-            );
-            setAffiliates(enrichedAffiliates);
-          }
-        } else if (affiliatesData) {
-          setAffiliates(affiliatesData as EnrichedAffiliate[]);
+                
+                return {
+                  ...affiliate,
+                  email: profileData?.email || 'Unknown',
+                  total_commission: totalCommission,
+                  total_sales: totalSales,
+                  customer_count: customerCount
+                };
+              } catch (enrichError) {
+                console.error('Error enriching affiliate data:', enrichError);
+                return {
+                  ...affiliate, 
+                  email: 'Error loading data',
+                  total_commission: 0,
+                  total_sales: 0,
+                  customer_count: 0
+                };
+              }
+            })
+          );
+          setAffiliates(enrichedAffiliates);
         }
       } catch (error: any) {
         console.error('Error fetching affiliates:', error);
