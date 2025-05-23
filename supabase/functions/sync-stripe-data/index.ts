@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0'
 import { Stripe } from 'https://esm.sh/stripe@14.22.0'
@@ -15,7 +16,7 @@ const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
 })
 
-// Set up CORS headers
+// Set up CORS headers - ensuring all origins are allowed
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -207,6 +208,8 @@ serve(async (req: Request) => {
   }
   
   try {
+    console.log("Function started, method:", req.method);
+    
     // Check for valid method
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
@@ -228,7 +231,9 @@ serve(async (req: Request) => {
     let options = {};
     try {
       options = await req.json();
+      console.log("Request options:", options);
     } catch (error) {
+      console.log("Failed to parse request body, using default options");
       // If body parsing fails, default options are fine
     }
     
@@ -239,13 +244,13 @@ serve(async (req: Request) => {
     if (fullRefresh) {
       // If full refresh, start from beginning of time
       createdAfter = 0;
+      console.log("Full refresh requested, fetching all sessions");
     } else {
       // Get the last refresh timestamp
       const lastRefreshIso = await getLastRefreshTimestamp();
       createdAfter = Math.floor(new Date(lastRefreshIso).getTime() / 1000);
+      console.log(`Incremental refresh, fetching sessions after ${new Date(createdAfter * 1000).toISOString()}`);
     }
-    
-    console.log(`Fetching Stripe sessions ${fullRefresh ? '(full refresh)' : `created after ${new Date(createdAfter * 1000).toISOString()}`}`);
     
     // Initialize counters
     let processed = 0;
@@ -253,80 +258,98 @@ serve(async (req: Request) => {
     let skipped = 0;
     let errors = 0;
     
-    // Create a paginated query with auto-pagination
-    let hasMore = true;
-    let startingAfter = null;
-    
-    while (hasMore) {
-      const queryParams: any = {
-        limit: 100,
-        created: { gt: createdAfter },
-        expand: ['total_details.breakdown.discounts.discount', 'customer_details']
-      };
+    try {
+      // Create a paginated query with auto-pagination
+      let hasMore = true;
+      let startingAfter = null;
       
-      if (startingAfter) {
-        queryParams.starting_after = startingAfter;
-      }
-      
-      // Fetch sessions from Stripe
-      const sessions = await stripe.checkout.sessions.list(queryParams);
-      
-      // Process each session
-      for (const session of sessions.data) {
-        processed++;
+      while (hasMore) {
+        const queryParams: any = {
+          limit: 100,
+          created: { gt: createdAfter },
+        };
         
-        try {
-          const saleRecord = await processCheckoutSession(session);
+        if (startingAfter) {
+          queryParams.starting_after = startingAfter;
+        }
+        
+        console.log(`Fetching batch of sessions, params:`, queryParams);
+        
+        // Fetch sessions from Stripe
+        const sessions = await stripe.checkout.sessions.list(queryParams);
+        console.log(`Retrieved ${sessions.data.length} sessions`);
+        
+        // Process each session
+        for (const session of sessions.data) {
+          processed++;
           
-          if (saleRecord) {
-            // Upsert the record into the database
-            const { error } = await supabase
-              .from('promo_code_sales')
-              .upsert(saleRecord, { 
-                onConflict: 'session_id',
-                ignoreDuplicates: false 
-              });
+          try {
+            // Get session details including discounts
+            const sessionWithDetails = await stripe.checkout.sessions.retrieve(
+              session.id,
+              { expand: ['total_details.breakdown.discounts', 'customer_details'] }
+            );
             
-            if (error) {
-              console.error(`Error saving session ${session.id}: ${error.message}`);
-              errors++;
+            const saleRecord = await processCheckoutSession(sessionWithDetails);
+            
+            if (saleRecord) {
+              // Upsert the record into the database
+              const { error } = await supabase
+                .from('promo_code_sales')
+                .upsert(saleRecord, { 
+                  onConflict: 'session_id',
+                  ignoreDuplicates: false 
+                });
+              
+              if (error) {
+                console.error(`Error saving session ${session.id}: ${error.message}`);
+                errors++;
+              } else {
+                saved++;
+              }
             } else {
-              saved++;
+              skipped++;
             }
-          } else {
-            skipped++;
+          } catch (error) {
+            console.error(`Error processing session ${session.id}: ${error}`);
+            errors++;
           }
-        } catch (error) {
-          console.error(`Error processing session ${session.id}: ${error}`);
-          errors++;
+        }
+        
+        // Update pagination for next batch
+        if (sessions.has_more && sessions.data.length > 0) {
+          startingAfter = sessions.data[sessions.data.length - 1].id;
+          console.log(`More sessions available, continuing with cursor: ${startingAfter}`);
+        } else {
+          hasMore = false;
+          console.log("No more sessions to fetch");
         }
       }
       
-      // Update pagination for next batch
-      if (sessions.has_more && sessions.data.length > 0) {
-        startingAfter = sessions.data[sessions.data.length - 1].id;
-      } else {
-        hasMore = false;
-      }
+      // Update the last refresh timestamp
+      await updateLastRefreshTimestamp();
+      console.log(`Sync complete: processed ${processed}, saved ${saved}, skipped ${skipped}, errors ${errors}`);
+      
+      // Return summary with CORS headers
+      return new Response(JSON.stringify({
+        success: true,
+        stats: {
+          processed,
+          saved,
+          skipped,
+          errors
+        }
+      }), { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    } catch (stripeError) {
+      console.error('Error in Stripe API calls:', stripeError);
+      return new Response(JSON.stringify({ error: stripeError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
-    
-    // Update the last refresh timestamp
-    await updateLastRefreshTimestamp();
-    
-    // Return summary with CORS headers
-    return new Response(JSON.stringify({
-      success: true,
-      stats: {
-        processed,
-        saved,
-        skipped,
-        errors
-      }
-    }), { 
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
-    
   } catch (error) {
     console.error('Error in sync-stripe-data:', error);
     return new Response(JSON.stringify({ error: error.message }), { 

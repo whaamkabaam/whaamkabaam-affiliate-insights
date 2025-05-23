@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
@@ -91,27 +92,35 @@ export default function AdminDashboard() {
     
     setSyncingStripe(true);
     try {
-      const response = await fetch("https://xfkkmkxeoqawqnvahhoe.supabase.co/functions/v1/sync-stripe-data", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({ fullRefresh })
-      });
+      // Get the access token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+      if (!accessToken) {
+        throw new Error("No access token available");
       }
       
-      const result = await response.json();
+      toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
       
-      toast.success(`Stripe data synced: ${result.stats.saved} records processed, ${result.stats.skipped} skipped`);
+      // Call the edge function through the Supabase client instead of direct fetch
+      const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
+        method: "POST",
+        body: { fullRefresh }
+      });
+      
+      if (error) throw error;
+      
+      if (data) {
+        toast.success(`Stripe data synced: ${data.stats.saved} records processed, ${data.stats.skipped} skipped`);
+      } else {
+        toast.warning("Sync completed but no statistics were returned");
+      }
+      
       fetchLastSyncTime();
       fetchAffiliateOverviews();
     } catch (error) {
       console.error("Error syncing Stripe data:", error);
-      toast.error("Failed to sync Stripe data");
+      toast.error(`Failed to sync Stripe data: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSyncingStripe(false);
     }
