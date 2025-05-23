@@ -54,6 +54,69 @@ export type Database = {
         }
         Relationships: []
       }
+      promo_code_sales: {
+        Row: {
+          affiliate_commission: number | null
+          amount_paid: number
+          created_at: string
+          customer_email: string | null
+          id: string
+          payment_intent_id: string | null
+          product_id: string | null
+          product_name: string | null
+          promo_code_id: string | null
+          promo_code_name: string | null
+          refreshed_at: string
+          session_id: string
+        }
+        Insert: {
+          affiliate_commission?: number | null
+          amount_paid: number
+          created_at: string
+          customer_email?: string | null
+          id?: string
+          payment_intent_id?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          promo_code_id?: string | null
+          promo_code_name?: string | null
+          refreshed_at?: string
+          session_id: string
+        }
+        Update: {
+          affiliate_commission?: number | null
+          amount_paid?: number
+          created_at?: string
+          customer_email?: string | null
+          id?: string
+          payment_intent_id?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          promo_code_id?: string | null
+          promo_code_name?: string | null
+          refreshed_at?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { InitializeUsers } from "@/components/InitializeUsers";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, DatabaseIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -18,12 +18,15 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
   const { affiliateOverviews, isLoading, fetchAffiliateOverviews, error } = useAffiliate();
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
+  const [syncingStripe, setSyncingStripe] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -39,6 +42,7 @@ export default function AdminDashboard() {
     // Fetch affiliate data after a short delay
     const timer = setTimeout(() => {
       fetchAffiliateOverviews();
+      fetchLastSyncTime();
     }, 500);
     
     return () => clearTimeout(timer);
@@ -51,6 +55,24 @@ export default function AdminDashboard() {
     }
   }, [error]);
 
+  const fetchLastSyncTime = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value, updated_at')
+        .eq('key', 'last_stripe_refresh')
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setLastSyncTime(data.updated_at);
+      }
+    } catch (error) {
+      console.error("Error fetching last sync time:", error);
+    }
+  };
+
   const handleRefresh = async () => {
     if (isLoading || refreshing) return;
     
@@ -62,6 +84,37 @@ export default function AdminDashboard() {
       toast.error("Failed to refresh affiliate data");
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const syncStripeData = async (fullRefresh: boolean = false) => {
+    if (syncingStripe) return;
+    
+    setSyncingStripe(true);
+    try {
+      const response = await fetch("https://xfkkmkxeoqawqnvahhoe.supabase.co/functions/v1/sync-stripe-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.SUPABASE_ANON_KEY || (await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ fullRefresh })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      toast.success(`Stripe data synced: ${result.stats.saved} records processed, ${result.stats.skipped} skipped`);
+      fetchLastSyncTime();
+      fetchAffiliateOverviews();
+    } catch (error) {
+      console.error("Error syncing Stripe data:", error);
+      toast.error("Failed to sync Stripe data");
+    } finally {
+      setSyncingStripe(false);
     }
   };
 
@@ -104,6 +157,8 @@ export default function AdminDashboard() {
                           <TableHead>Email</TableHead>
                           <TableHead>Code</TableHead>
                           <TableHead>Commission</TableHead>
+                          <TableHead className="text-right">Sales</TableHead>
+                          <TableHead className="text-right">Earned</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -112,6 +167,8 @@ export default function AdminDashboard() {
                             <TableCell>{affiliate.email}</TableCell>
                             <TableCell>{affiliate.affiliateCode}</TableCell>
                             <TableCell>{(affiliate.commissionRate * 100).toFixed(0)}%</TableCell>
+                            <TableCell className="text-right">${affiliate.totalSales?.toFixed(2) || "0.00"}</TableCell>
+                            <TableCell className="text-right">${affiliate.totalCommission?.toFixed(2) || "0.00"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -125,6 +182,49 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </div>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <DatabaseIcon className="h-5 w-5 mr-2" /> 
+                Stripe Data Synchronization
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  {lastSyncTime ? (
+                    <p>Last synchronized: {new Date(lastSyncTime).toLocaleString()}</p>
+                  ) : (
+                    <p>No synchronization history available.</p>
+                  )}
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button 
+                    onClick={() => syncStripeData(false)}
+                    disabled={syncingStripe}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${syncingStripe ? "animate-spin" : ""}`} />
+                    Sync New Data
+                  </Button>
+                  
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => syncStripeData(true)}
+                    disabled={syncingStripe}
+                  >
+                    <DatabaseIcon className="h-4 w-4 mr-2" />
+                    Full Sync (All Data)
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  "Sync New Data" will only fetch Stripe sessions since the last sync. "Full Sync" will fetch all historical data.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </main>
       </div>
     </div>

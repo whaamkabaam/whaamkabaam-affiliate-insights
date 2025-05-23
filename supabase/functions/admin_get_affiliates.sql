@@ -12,12 +12,13 @@ AS $$
 DECLARE
     requesting_user_id uuid;
     is_admin boolean;
+    affiliate_record RECORD;
+    result json;
 BEGIN
     -- Get the ID of the user making the request
     requesting_user_id := auth.uid();
     
     -- Check if the requesting user is an admin
-    -- We'll use a simpler query that's less likely to cause issues
     SELECT EXISTS (
         SELECT 1
         FROM affiliates a
@@ -31,24 +32,50 @@ BEGIN
     END IF;
     
     -- Return affiliate data with their commission metrics
-    -- Using json_build_object for clearer structure
-    RETURN QUERY
-    SELECT json_build_object(
-        'id', a.id,
-        'user_id', a.user_id,
-        'email', auth.users.email,
-        'affiliate_code', a.affiliate_code,
-        'commission_rate', a.commission_rate,
-        'total_commission', 0::numeric, -- Placeholder for commission data
-        'total_sales', 0::numeric, -- Placeholder for sales data
-        'customer_count', 0::numeric, -- Placeholder for customer count
-        'created_at', a.created_at
-    )
-    FROM affiliates a
-    JOIN auth.users ON a.user_id = auth.users.id
-    WHERE a.commission_rate IS NOT NULL  -- Ensure we have a commission rate
-    ORDER BY a.created_at DESC
-    LIMIT 100;  -- Limit results to avoid potential performance issues
+    FOR affiliate_record IN 
+        SELECT 
+            a.id, 
+            a.user_id, 
+            u.email, 
+            a.affiliate_code,
+            a.commission_rate,
+            COALESCE(SUM(pcs.affiliate_commission), 0) as total_commission,
+            COALESCE(SUM(pcs.amount_paid), 0) as total_sales,
+            COALESCE(COUNT(DISTINCT pcs.customer_email), 0) as customer_count,
+            a.created_at
+        FROM 
+            affiliates a
+        JOIN 
+            auth.users u ON a.user_id = u.id
+        LEFT JOIN 
+            promo_code_sales pcs ON a.affiliate_code = pcs.promo_code_name
+        GROUP BY 
+            a.id, a.user_id, u.email, a.affiliate_code, a.commission_rate, a.created_at
+        ORDER BY 
+            a.created_at DESC
+        LIMIT 100
+    LOOP
+        -- Construct JSON object for each affiliate
+        SELECT json_build_object(
+            'id', affiliate_record.id,
+            'user_id', affiliate_record.user_id,
+            'email', affiliate_record.email,
+            'affiliate_code', affiliate_record.affiliate_code,
+            'commission_rate', affiliate_record.commission_rate,
+            'total_commission', affiliate_record.total_commission,
+            'total_sales', affiliate_record.total_sales,
+            'customer_count', affiliate_record.customer_count,
+            'created_at', affiliate_record.created_at
+        ) INTO result;
+        
+        -- Return current row
+        RETURN NEXT result;
+    END LOOP;
+    
+    -- Return empty if no records found
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
 END;
 $$;
 
