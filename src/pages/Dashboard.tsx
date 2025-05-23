@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,7 +31,7 @@ export default function Dashboard() {
 
     // Only fetch data if we haven't already initiated a fetch
     // and we're not already loading or refreshing
-    if (!dataFetchInitiated && !isLoading && !dataRefreshing) {
+    if (!dataFetchInitiated && !dataRefreshing) {
       setDataFetchInitiated(true);
       setDataRefreshing(true);
       fetchCommissionData(selectedYear, selectedMonth)
@@ -40,7 +39,7 @@ export default function Dashboard() {
           setDataRefreshing(false);
         });
     }
-  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, isLoading, dataRefreshing, dataFetchInitiated]);
+  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, dataRefreshing, dataFetchInitiated]);
 
   useEffect(() => {
     if (error) {
@@ -72,8 +71,6 @@ export default function Dashboard() {
     }
   };
 
-  // Render loading state for the initial load
-  // but still show partial data that we have
   const renderDashboardContent = () => {
     if (isLoading && !summary) {
       return (

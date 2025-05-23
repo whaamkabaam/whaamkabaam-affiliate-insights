@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -142,15 +141,10 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // If the user is admin, they don't have personal affiliate data
-    // but we should still load the affiliate overviews for them
+    // If the user is admin, they should call fetchAffiliateOverviews() instead
+    // but we don't need to reset the state here
     if (isAdmin) {
       await fetchAffiliateOverviews();
-      
-      // Set empty commission data for admin users
-      setCommissions([]);
-      setSummary(defaultSummary);
-      
       return;
     }
 

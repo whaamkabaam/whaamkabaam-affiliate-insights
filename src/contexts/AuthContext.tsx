@@ -81,19 +81,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         affiliateCode = parsedData.affiliate_code;
       }
       
-      // For testing - if email is nic@whaamkabaam.com or maru@whaamkabaam.com and no affiliate code found,
-      // assign a default code
+      // Get user metadata directly from auth to check if affiliate_code is already there
+      const { data: userData, error: userError } = await supabase.auth.getUser();
       let email: string | undefined = undefined;
+      let metadataAffiliateCode: string | undefined = undefined;
       
-      try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (!userError && userData?.user) {
-          email = userData.user.email;
-        }
-      } catch (e) {
-        console.error("Error getting user email:", e);
+      if (!userError && userData?.user) {
+        email = userData.user.email;
+        metadataAffiliateCode = userData.user.user_metadata?.affiliate_code;
       }
       
+      // First check user_metadata for affiliate_code
+      if (metadataAffiliateCode) {
+        affiliateCode = metadataAffiliateCode;
+        console.log(`Found affiliate code '${affiliateCode}' in user metadata`);
+      }
+      
+      // If no affiliate code found yet, use the one from the database
       if (!affiliateCode && email) {
         if (email.toLowerCase() === 'nic@whaamkabaam.com') {
           affiliateCode = 'nic';
