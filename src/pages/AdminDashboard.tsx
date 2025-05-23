@@ -94,7 +94,7 @@ export default function AdminDashboard() {
     toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
     
     try {
-      // Call the edge function through the Supabase client
+      // Call the edge function using Supabase client
       const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
         method: "POST",
         body: { fullRefresh }

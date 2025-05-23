@@ -16,7 +16,7 @@ const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
 })
 
-// Set up CORS headers - ensuring all origins are allowed
+// Set up CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -43,7 +43,7 @@ interface PromoCodeSale {
 
 // Main handler
 serve(async (req: Request) => {
-  // Handle CORS preflight requests - THIS MUST BE THE FIRST THING WE DO
+  // IMPORTANT: Handle CORS preflight requests FIRST - before any other processing
   if (req.method === 'OPTIONS') {
     console.log("Handling OPTIONS preflight request");
     return new Response(null, { 
@@ -84,22 +84,40 @@ serve(async (req: Request) => {
     
     // Function to map promo code to affiliate code
     async function getAffiliateCodeByPromoCode(promoCode: string): Promise<{ code: string; rate: number } | null> {
+      console.log(`Looking up affiliate for promo code: ${promoCode}`);
+      
       // First check if the promo code directly matches an affiliate code
-      const { data: affiliates } = await supabase
+      const { data: affiliates, error } = await supabase
         .from('affiliates')
         .select('affiliate_code, commission_rate')
-        .eq('affiliate_code', promoCode.toUpperCase());
+        .ilike('affiliate_code', promoCode);
+      
+      if (error) {
+        console.error(`Error looking up affiliate: ${error.message}`);
+        return null;
+      }
       
       if (affiliates && affiliates.length > 0) {
+        console.log(`Found matching affiliate: ${affiliates[0].affiliate_code}`);
         return { 
           code: affiliates[0].affiliate_code,
           rate: affiliates[0].commission_rate 
         };
       }
       
-      // If no direct match, you could implement custom mapping logic here
-      // For example, if promo code "SUMMER50_NIC" should map to affiliate "NIC"
+      // Add special mapping for "nic" and "maru" if they aren't direct matches
+      const specialMappings: Record<string, { code: string, rate: number }> = {
+        'nic': { code: 'nic', rate: 0.1 },
+        'maru': { code: 'maru', rate: 0.1 },
+      };
       
+      const normalizedPromoCode = promoCode.toLowerCase();
+      if (normalizedPromoCode in specialMappings) {
+        console.log(`Using special mapping for ${normalizedPromoCode}`);
+        return specialMappings[normalizedPromoCode];
+      }
+      
+      console.log(`No affiliate found for promo code: ${promoCode}`);
       return null;
     }
 
@@ -268,6 +286,7 @@ serve(async (req: Request) => {
         const queryParams: any = {
           limit: 100,
           created: { gt: createdAfter },
+          expand: ['total_details.breakdown.discounts', 'customer_details'],
         };
         
         if (startingAfter) {
@@ -285,13 +304,8 @@ serve(async (req: Request) => {
           processed++;
           
           try {
-            // Get session details including discounts
-            const sessionWithDetails = await stripe.checkout.sessions.retrieve(
-              session.id,
-              { expand: ['total_details.breakdown.discounts', 'customer_details'] }
-            );
-            
-            const saleRecord = await processCheckoutSession(sessionWithDetails);
+            // Process each session - no need to re-fetch since we've expanded everything
+            const saleRecord = await processCheckoutSession(session);
             
             if (saleRecord) {
               // Upsert the record into the database
