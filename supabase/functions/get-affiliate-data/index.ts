@@ -126,7 +126,63 @@ serve(async (req) => {
     let totalRevenue = 0;
     let totalCommission = 0;
 
-    if (affiliateCode === "ayoub") {
+    // Special case for ADMIN: Return sample data for demonstration
+    if (affiliateCode === "ADMIN") {
+      // Add sample data for demonstration purposes
+      const sampleDate = new Date();
+      
+      // Add a few sample commissions
+      commissions.push({
+        sessionId: "cs_sample_1",
+        paymentIntent: "pi_sample_1",
+        customerEmail: "customer1@example.com",
+        amount: 116.10,
+        commission: 29.80,
+        date: new Date(sampleDate.getFullYear(), sampleDate.getMonth(), 5).toISOString(),
+        productId: "prod_RINO6yE0y4O9gX"
+      });
+      
+      commissions.push({
+        sessionId: "cs_sample_2",
+        paymentIntent: "pi_sample_2",
+        customerEmail: "customer2@example.com",
+        amount: 35.10,
+        commission: 7.80,
+        date: new Date(sampleDate.getFullYear(), sampleDate.getMonth(), 12).toISOString(),
+        productId: "prod_RINKAvP3L2kZeV"
+      });
+      
+      commissions.push({
+        sessionId: "cs_sample_3",
+        paymentIntent: "pi_sample_3",
+        customerEmail: "customer3@example.com",
+        amount: 42.30,
+        commission: 9.40,
+        date: new Date(sampleDate.getFullYear(), sampleDate.getMonth(), 20).toISOString(),
+        productId: "prod_RINJvQw1Qw1Qw1Q"
+      });
+      
+      // Calculate summary data
+      totalRevenue = 193.50; // Sum of all amounts
+      totalCommission = 47.00; // Sum of all commissions
+      customerEmails.add("customer1@example.com");
+      customerEmails.add("customer2@example.com");
+      customerEmails.add("customer3@example.com");
+      
+      console.log(`Returning ${commissions.length} sample commissions for ${affiliateCode}`);
+      
+      return new Response(
+        JSON.stringify({
+          commissions,
+          summary: {
+            totalRevenue,
+            totalCommission,
+            customerCount: customerEmails.size
+          }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    } else if (affiliateCode === "ayoub") {
       // Special case for ayoub: all $149 sales without 'nic' or 'maru' code
       // List all checkout sessions within the date range
       const sessions = await stripe.checkout.sessions.list({ 
