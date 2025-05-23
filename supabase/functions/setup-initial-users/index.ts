@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
 import { createClient as createAdminClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
@@ -16,6 +17,7 @@ const adminAuthClient = createAuthClient(supabaseUrl, supabaseServiceKey, {
 });
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -162,13 +164,19 @@ serve(async (req) => {
     await setupAffiliates();
 
     return new Response(
-      JSON.stringify({ message: 'Initial users and affiliates setup completed.' }),
+      JSON.stringify({ 
+        success: true, 
+        message: 'Initial users and affiliates setup completed.' 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
     console.error('Error in setup-initial-users:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: error.message 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

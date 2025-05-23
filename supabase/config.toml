@@ -1,3 +1,6 @@
 
 [functions.sync-stripe-data]
 verify_jwt = true
+
+[functions.setup-initial-users]
+verify_jwt = false
