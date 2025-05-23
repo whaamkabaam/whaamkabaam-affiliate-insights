@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -51,7 +50,7 @@ export default function Customers() {
         const { data: affiliateData } = await supabase
           .from('affiliates')
           .select('affiliate_code')
-          .eq('user_id', supabase.auth.getUser().then(res => res.data.user?.id))
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
           
         if (affiliateData?.affiliate_code) {

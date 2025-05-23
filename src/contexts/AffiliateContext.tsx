@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,7 +30,8 @@ export interface AffiliateOverview {
   affiliateCode: string;
   commissionRate: number;
   totalCommission: number;
-  totalRevenue: number;
+  totalSales: number;
+  totalRevenue?: number; // For backward compatibility
   customerCount: number;
 }
 
@@ -102,7 +102,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
           affiliateCode: item.affiliate_code || '',
           commissionRate: Number(item.commission_rate) || 0,
           totalCommission: Number(item.total_commission) || 0,
-          totalRevenue: Number(item.total_sales) || 0,
+          totalSales: Number(item.total_sales) || 0,
           customerCount: Number(item.customer_count) || 0
         }));
         

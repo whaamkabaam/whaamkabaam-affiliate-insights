@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0'
 import { Stripe } from 'https://esm.sh/stripe@14.22.0'
@@ -15,6 +14,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
 })
+
+// Set up CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
 interface SystemSettings {
   timestamp: string;
@@ -192,12 +198,20 @@ async function updateLastRefreshTimestamp(): Promise<void> {
 
 // Main handler
 serve(async (req: Request) => {
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { 
+      status: 204,
+      headers: corsHeaders 
+    });
+  }
+  
   try {
     // Check for valid method
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
         status: 405,
-        headers: { 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
     
@@ -206,7 +220,7 @@ serve(async (req: Request) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
         status: 401,
-        headers: { 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
     
@@ -299,7 +313,7 @@ serve(async (req: Request) => {
     // Update the last refresh timestamp
     await updateLastRefreshTimestamp();
     
-    // Return summary
+    // Return summary with CORS headers
     return new Response(JSON.stringify({
       success: true,
       stats: {
@@ -310,14 +324,14 @@ serve(async (req: Request) => {
       }
     }), { 
       status: 200,
-      headers: { 'Content-Type': 'application/json' } 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
     
   } catch (error) {
     console.error('Error in sync-stripe-data:', error);
     return new Response(JSON.stringify({ error: error.message }), { 
       status: 500,
-      headers: { 'Content-Type': 'application/json' } 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   }
 });

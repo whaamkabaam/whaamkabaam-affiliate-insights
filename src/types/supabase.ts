@@ -10,3 +10,13 @@ export interface AffiliateRpcResponse {
   customer_count: number;
   created_at: string;
 }
+
+export interface AffiliateOverview {
+  email: string;
+  affiliateCode: string;
+  commissionRate: number;
+  totalCommission: number;
+  totalSales: number;
+  totalRevenue?: number; // Adding this for backward compatibility
+  customerCount: number;
+}
