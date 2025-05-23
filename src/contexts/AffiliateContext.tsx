@@ -161,6 +161,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
         summary: CommissionSummary;
       }>("get-affiliate-data", {
         body: {
+          // Ensure the affiliate code is properly passed as-is (whether uppercase or lowercase)
           affiliateCode: user.affiliateCode,
           year,
           month

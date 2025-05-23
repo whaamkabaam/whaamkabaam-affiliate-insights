@@ -1,229 +1,175 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
+import { createClient as createAdminClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
+import { createClient as createAuthClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
+import { corsHeaders } from '../_shared/cors.ts';
 
-// Follow this setup guide to integrate the Deno runtime into your application:
-// https://deno.land/manual/examples/deploy_node_server
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
+const supabaseAdmin = createAdminClient(supabaseUrl, supabaseServiceKey);
+const adminAuthClient = createAuthClient(supabaseUrl, supabaseServiceKey, {
+  global: {
+    headers: { 'Content-Type': 'application/json' },
+  },
+});
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-interface User {
-  email: string;
-  password: string;
-  affiliate_code?: string;
-  is_admin: boolean;
-}
-
-// Handle CORS preflight request
-function handleCors(req: Request) {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
-}
 
-// Create a single user and related records
-async function createUser(
-  supabase: any,
-  serviceSuabase: any,
-  { email, password, affiliate_code, is_admin }: User
-) {
   try {
-    console.log(`Processing user: ${email}`);
-    
-    // Check if user already exists (by email)
-    const { data: existingUsers, error: checkError } = await serviceSuabase.auth.admin.listUsers();
-    
-    if (checkError) {
-      console.error(`Error checking existing users:`, checkError);
-      return { success: false, error: checkError };
-    }
-    
-    const existingUser = existingUsers?.users?.find((u: any) => u.email === email);
-    
-    // If user exists, update their password
-    if (existingUser) {
-      console.log(`User ${email} already exists. Updating password.`);
+    const { user } = await req.json();
+
+    // 1. Create Users
+    async function setupUsers() {
+      console.log("Setting up initial users...");
       
-      // Update the user's password
-      const { data: updatedUser, error: updateError } = await serviceSuabase.auth.admin.updateUserById(
-        existingUser.id,
-        { password }
-      );
+      const users = [
+        { email: "ayoub@whaamkabaam.com", password: "Test1234!", name: "Ayoub Test" },
+        { email: "nic@whaamkabaam.com", password: "Test1234!", name: "Nic Test" },
+        { email: "maru@whaamkabaam.com", password: "Test1234!", name: "Maru Test" },
+        { email: "admin@whaamkabaam.com", password: "AdminTest123", name: "Admin User" }
+      ];
       
-      if (updateError) {
-        console.error(`Error updating password for ${email}:`, updateError);
-        return { success: false, error: updateError };
-      }
-      
-      console.log(`Updated password for user ${email}`);
-      return { 
-        success: true,
-        exists: true,
-        email,
-        password,
-        userId: existingUser.id
-      };
-    }
-
-    // Create user in auth system with explicit data
-    const { data: authData, error: authError } = await serviceSuabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        is_admin: is_admin,
-        affiliate_code: affiliate_code || null
-      }
-    });
-
-    if (authError) {
-      console.error(`Error creating user ${email}:`, authError);
-      return { success: false, error: authError };
-    }
-
-    const userId = authData.user.id;
-    console.log(`Created user ${email} with ID ${userId}`);
-
-    // Create profile entry
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: userId,
-        full_name: email.split('@')[0].toUpperCase(),
-        display_name: email.split('@')[0]
-      });
-
-    if (profileError) {
-      console.error(`Error creating profile for ${email}:`, profileError);
-      // Continue anyway, profile is not critical
-    }
-
-    // If admin, add admin role through the affiliate table with high commission rate
-    if (is_admin) {
-      const { error: adminError } = await supabase
-        .from('affiliates')
-        .insert({
-          user_id: userId,
-          affiliate_code: 'admin',
-          commission_rate: 0.5, // 50% commission indicates admin role
-        });
-
-      if (adminError) {
-        console.error(`Error setting admin role for ${email}:`, adminError);
-        return { success: false, error: adminError };
-      }
-    } else {
-      // If not admin, it's a regular affiliate
-      if (affiliate_code) {
-        const { error: affiliateError } = await supabase
-          .from('affiliates')
-          .insert({
-            user_id: userId,
-            affiliate_code,
-            commission_rate: 0.1, // 10% commission for regular affiliates
+      for (const userData of users) {
+        try {
+          // Check if user already exists
+          const { data: existingUser } = await adminAuthClient.getUserByEmail(userData.email);
+          
+          if (existingUser && existingUser.user) {
+            console.log(`User ${userData.email} already exists, skipping creation.`);
+            continue;
+          }
+          
+          // Create user
+          const { data, error } = await adminAuthClient.createUser({
+            email: userData.email,
+            password: userData.password,
+            user_metadata: {
+              name: userData.name
+            }
           });
-
-        if (affiliateError) {
-          console.error(`Error creating affiliate for ${email}:`, affiliateError);
-          return { success: false, error: affiliateError };
+          
+          if (error) {
+            console.error(`Error creating user ${userData.email}: ${error.message}`);
+          } else {
+            console.log(`User ${userData.email} created with ID: ${data.user?.id}`);
+            
+            // Create profile for the user
+            const { error: profileError } = await supabaseAdmin
+              .from('profiles')
+              .insert({
+                id: data.user?.id,
+                email: userData.email,
+                full_name: userData.name,
+                display_name: userData.name.split(" ")[0] // Use first name as display name
+              });
+            
+            if (profileError) {
+              console.error(`Error creating profile for ${userData.email}: ${profileError.message}`);
+            } else {
+              console.log(`Profile created for ${userData.email}`);
+            }
+          }
+        } catch (err) {
+          console.error(`Error setting up user ${userData.email}:`, err);
         }
       }
     }
 
-    return { 
-      success: true, 
-      email,
-      password,
-      userId,
-      affiliate_code, 
-      is_admin
-    };
-  } catch (error) {
-    console.error(`Unexpected error setting up user ${email}:`, error);
-    return { success: false, error };
-  }
-}
-
-Deno.serve(async (req) => {
-  console.log(`Request received: ${req.method} ${req.url}`);
-  
-  // Handle CORS
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
-
-  // Get environment variables
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-    console.error('Missing required environment variables');
-    return new Response(
-      JSON.stringify({ 
-        error: 'Missing Supabase environment variables',
-        envVars: {
-          url: !!supabaseUrl,
-          anonKey: !!supabaseAnonKey,
-          serviceKey: !!supabaseServiceKey
+    // After creating users, ensure they have affiliate entries
+    async function setupAffiliates() {
+      console.log("Setting up affiliate entries for users...");
+      
+      const affiliateSetups = [
+        { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1 },
+        { email: "nic@whaamkabaam.com", code: "nic", rate: 0.1 },  // Make sure "nic" is added
+        { email: "maru@whaamkabaam.com", code: "maru", rate: 0.1 }, // Make sure "maru" is added
+        { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2 }
+      ];
+      
+      for (const setup of affiliateSetups) {
+        try {
+          // Get user ID
+          const { data: userData, error: userError } = await adminAuthClient.getUserByEmail(setup.email);
+          
+          if (userError) {
+            console.error(`Error getting user ID for ${setup.email}: ${userError.message}`);
+            continue;
+          }
+          
+          if (!userData?.id) {
+            console.error(`User ID not found for ${setup.email}`);
+            continue;
+          }
+          
+          // Check if affiliate entry already exists
+          const { data: existingAffiliates, error: checkError } = await supabaseAdmin
+            .from('affiliates')
+            .select('*')
+            .eq('user_id', userData.id);
+            
+          if (checkError) {
+            console.error(`Error checking for existing affiliate entry: ${checkError.message}`);
+            continue;
+          }
+          
+          if (existingAffiliates && existingAffiliates.length > 0) {
+            console.log(`Affiliate entry already exists for ${setup.email}, updating...`);
+            
+            // Update existing entry
+            const { error: updateError } = await supabaseAdmin
+              .from('affiliates')
+              .update({ 
+                affiliate_code: setup.code, 
+                commission_rate: setup.rate 
+              })
+              .eq('user_id', userData.id);
+              
+            if (updateError) {
+              console.error(`Error updating affiliate entry: ${updateError.message}`);
+            } else {
+              console.log(`Updated affiliate entry for ${setup.email}`);
+            }
+          } else {
+            console.log(`Creating new affiliate entry for ${setup.email}`);
+            
+            // Create new affiliate entry
+            const { error: insertError } = await supabaseAdmin
+              .from('affiliates')
+              .insert({
+                user_id: userData.id,
+                affiliate_code: setup.code,
+                commission_rate: setup.rate
+              });
+              
+            if (insertError) {
+              console.error(`Error creating affiliate entry: ${insertError.message}`);
+            } else {
+              console.log(`Created affiliate entry for ${setup.email}`);
+            }
+          }
+        } catch (err) {
+          console.error(`Error setting up affiliate for ${setup.email}:`, err);
         }
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      }
+    }
+
+    await setupUsers();
+    await setupAffiliates();
+
+    return new Response(
+      JSON.stringify({ message: 'Initial users and affiliates setup completed.' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    );
+  } catch (error) {
+    console.error('Error in setup-initial-users:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
-
-  console.log(`Creating Supabase clients with URL: ${supabaseUrl}`);
-
-  // Create Supabase clients
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  const serviceSuabase = createClient(supabaseUrl, supabaseServiceKey);
-
-  // Define passwords for all users - simpler passwords for testing
-  // Use simpler passwords for testing to avoid special character issues
-  const ayoubPassword = "AyoubTest123";
-  const nicPassword = "NicTest123";
-  const maruPassword = "MaruTest123";
-  const adminPassword = "AdminTest123";
-
-  // Log what we're about to do
-  console.log("Generated test passwords:");
-  console.log(`Admin: ${adminPassword}`);
-  console.log(`Ayoub: ${ayoubPassword}`);
-  console.log(`Nic: ${nicPassword}`);
-  console.log(`Maru: ${maruPassword}`);
-
-  // Create all users
-  const users: User[] = [
-    { email: 'ayoub@whaamkabaam.com', password: ayoubPassword, affiliate_code: 'ayoub', is_admin: false },
-    { email: 'nic@whaamkabaam.com', password: nicPassword, affiliate_code: 'nic', is_admin: false },
-    { email: 'maru@whaamkabaam.com', password: maruPassword, affiliate_code: 'maru', is_admin: false },
-    { email: 'admin@whaamkabaam.com', password: adminPassword, is_admin: true },
-  ];
-
-  console.log(`Starting to create ${users.length} users`);
-  
-  const results = [];
-  for (const user of users) {
-    console.log(`Processing user: ${user.email}`);
-    const result = await createUser(supabase, serviceSuabase, user);
-    results.push({
-      email: user.email,
-      success: result.success,
-      password: result.success ? user.password : undefined,
-      exists: result.exists || false,
-      error: result.success ? undefined : result.error,
-    });
-  }
-
-  console.log(`Creation process completed with results:`, results);
-
-  return new Response(
-    JSON.stringify({
-      message: 'User setup process completed',
-      results,
-      supabaseUrl, // Include this for debugging
-    }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-})
+});

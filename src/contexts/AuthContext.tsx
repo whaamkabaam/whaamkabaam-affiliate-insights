@@ -80,6 +80,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const parsedData = affiliateData as unknown as AffiliateData;
         affiliateCode = parsedData.affiliate_code;
       }
+      
+      // For testing - if email is nic@whaamkabaam.com or maru@whaamkabaam.com and no affiliate code found,
+      // assign a default code
+      let email: string | undefined = undefined;
+      
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (!userError && userData?.user) {
+          email = userData.user.email;
+        }
+      } catch (e) {
+        console.error("Error getting user email:", e);
+      }
+      
+      if (!affiliateCode && email) {
+        if (email.toLowerCase() === 'nic@whaamkabaam.com') {
+          affiliateCode = 'nic';
+          console.log("Assigned default affiliate code 'nic' based on email");
+        } else if (email.toLowerCase() === 'maru@whaamkabaam.com') {
+          affiliateCode = 'maru';
+          console.log("Assigned default affiliate code 'maru' based on email");
+        }
+      }
 
       // Update user with additional data
       setUser(prevUser => {
