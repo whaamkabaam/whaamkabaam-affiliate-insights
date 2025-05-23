@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +65,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   });
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
+  const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
   const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
@@ -159,6 +161,14 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Generate a unique key for this fetch operation to prevent duplicate fetches
+    const fetchKey = `${user.affiliateCode}-${year}-${month}`;
+    if (currentFetchKey === fetchKey && isLoading) {
+      console.log(`Already fetching data for ${fetchKey}`);
+      return;
+    }
+    
+    setCurrentFetchKey(fetchKey);
     setIsLoading(true);
     setError(null);
 
@@ -181,23 +191,11 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error("Error fetching commission data:", error);
         setError(`Failed to fetch commission data: ${error.message}`);
-        setCommissions([]);
-        setSummary({
-          totalRevenue: 0,
-          totalCommission: 0,
-          customerCount: 0,
-        });
         return;
       }
 
       if (!data) {
         setError("No data returned from API");
-        setCommissions([]);
-        setSummary({
-          totalRevenue: 0,
-          totalCommission: 0,
-          customerCount: 0,
-        });
         return;
       }
 
@@ -225,14 +223,9 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.error("Exception during commission fetch:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch commission data");
-      setCommissions([]);
-      setSummary({
-        totalRevenue: 0,
-        totalCommission: 0,
-        customerCount: 0,
-      });
     } finally {
       setIsLoading(false);
+      setCurrentFetchKey(null);
     }
   };
 

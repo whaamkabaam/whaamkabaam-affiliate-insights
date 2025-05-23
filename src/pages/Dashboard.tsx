@@ -10,7 +10,7 @@ import { CommissionTable } from "@/components/CommissionTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/MonthPicker";
-import { DollarSign, Users, TrendingUp, Calendar, Loader2 } from "lucide-react";
+import { DollarSign, Users, TrendingUp, Calendar, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -19,6 +19,7 @@ export default function Dashboard() {
   const { fetchCommissionData, summary, isLoading, error } = useAffiliate();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [dataRefreshing, setDataRefreshing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,8 +29,15 @@ export default function Dashboard() {
       return;
     }
 
-    fetchCommissionData(selectedYear, selectedMonth);
-  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate]);
+    // Only fetch data if we're not already loading
+    if (!isLoading) {
+      setDataRefreshing(true);
+      fetchCommissionData(selectedYear, selectedMonth)
+        .finally(() => {
+          setDataRefreshing(false);
+        });
+    }
+  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, isLoading]);
 
   useEffect(() => {
     if (error) {
@@ -128,12 +136,29 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
+                  {dataRefreshing && (
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Refreshing data...
+                    </div>
+                  )}
                   <Button variant="outline" size="sm">
                     View All
                   </Button>
                 </div>
                 <CommissionTable limit={5} />
               </div>
+
+              {error && (
+                <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle className="h-5 w-5 text-red-500" />
+                      <p className="text-sm text-red-500">{error}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </main>

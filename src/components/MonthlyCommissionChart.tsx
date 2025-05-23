@@ -3,17 +3,18 @@ import { useState, useEffect } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 export function MonthlyCommissionChart() {
   const { getMonthlyStats, isAdmin } = useAffiliate();
   const [chartData, setChartData] = useState<{ month: string; commission: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
+      setIsRefreshing(true);
       setError(null);
       
       // If admin, show placeholder or aggregate data
@@ -26,6 +27,7 @@ export function MonthlyCommissionChart() {
           { month: "May", commission: 0 }
         ]);
         setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
       
@@ -56,6 +58,7 @@ export function MonthlyCommissionChart() {
       }
       setChartData(data);
       setIsLoading(false);
+      setIsRefreshing(false);
     };
 
     fetchData();
@@ -63,12 +66,15 @@ export function MonthlyCommissionChart() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="lg:col-span-4">
         <CardHeader>
           <CardTitle>Monthly Commission</CardTitle>
         </CardHeader>
         <CardContent className="h-80 flex items-center justify-center">
-          <div className="text-muted-foreground">Loading chart data...</div>
+          <div className="flex items-center flex-col gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="text-muted-foreground">Loading chart data...</div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -76,7 +82,7 @@ export function MonthlyCommissionChart() {
 
   if (error) {
     return (
-      <Card>
+      <Card className="lg:col-span-4">
         <CardHeader>
           <CardTitle>Monthly Commission</CardTitle>
         </CardHeader>
@@ -93,7 +99,7 @@ export function MonthlyCommissionChart() {
   // For admin, show placeholder text instead of chart
   if (isAdmin) {
     return (
-      <Card>
+      <Card className="lg:col-span-4">
         <CardHeader>
           <CardTitle>Monthly Commission</CardTitle>
         </CardHeader>
@@ -108,9 +114,15 @@ export function MonthlyCommissionChart() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="lg:col-span-4">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle>Monthly Commission</CardTitle>
+        {isRefreshing && (
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Updating...
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="h-80">
