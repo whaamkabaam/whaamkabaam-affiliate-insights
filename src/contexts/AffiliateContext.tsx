@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AffiliateRpcResponse } from "@/types/supabase";
@@ -64,8 +64,8 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   });
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
 
-  // Function for admin to fetch overview of all affiliates
-  const fetchAffiliateOverviews = async () => {
+  // Function for admin to fetch overview of all affiliates with retry mechanism
+  const fetchAffiliateOverviews = useCallback(async (retryCount = 0) => {
     if (!isAuthenticated || !isAdmin) {
       setError("Not authorized to view affiliate overviews");
       return;
@@ -75,14 +75,24 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
+      console.log("Fetching affiliate overviews...");
+      
       // Use RPC function to get affiliate data
       const { data, error } = await supabase.rpc('admin_get_affiliates');
       
       if (error) {
         console.error('RPC error:', error);
         toast.error('Failed to load affiliate data');
+        
+        // If we haven't tried too many times yet, retry after a delay
+        if (retryCount < 2) {
+          console.log(`Retrying... (${retryCount + 1})`);
+          setTimeout(() => fetchAffiliateOverviews(retryCount + 1), 1000 * (retryCount + 1));
+          return;
+        }
+        
         setAffiliateOverviews([]);
-        return;
+        throw error;
       }
       
       if (data && Array.isArray(data)) {
@@ -97,6 +107,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
         }));
         
         setAffiliateOverviews(overviews);
+        console.log(`Received ${overviews.length} affiliate records`);
       } else {
         console.error('Unexpected data format from RPC:', data);
         setAffiliateOverviews([]);
@@ -108,7 +119,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, isAdmin]);
 
   const fetchCommissionData = async (year: number, month: number) => {
     if (!isAuthenticated || !user) {
@@ -235,12 +246,28 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Effect to fetch initial affiliate overview data for admin users
+  // Effect to fetch initial affiliate overview data for admin users with delayed initialization
   useEffect(() => {
+    let isMounted = true;
+    
     if (isAuthenticated && isAdmin) {
-      fetchAffiliateOverviews();
+      // Add a small delay to allow the auth context to fully initialize
+      const timer = setTimeout(() => {
+        if (isMounted) {
+          fetchAffiliateOverviews();
+        }
+      }, 500);
+      
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
     }
-  }, [isAuthenticated, isAdmin]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, isAdmin, fetchAffiliateOverviews]);
 
   const value = {
     commissions,

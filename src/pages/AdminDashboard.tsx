@@ -21,7 +21,7 @@ import {
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
-  const { affiliateOverviews, isLoading, fetchAffiliateOverviews } = useAffiliate();
+  const { affiliateOverviews, isLoading, fetchAffiliateOverviews, error } = useAffiliate();
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,11 +36,24 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Fetch affiliate data when component mounts
-    fetchAffiliateOverviews();
+    // Fetch affiliate data after a short delay
+    const timer = setTimeout(() => {
+      fetchAffiliateOverviews();
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, [isAuthenticated, isAdmin, navigate, fetchAffiliateOverviews]);
+  
+  // Display any errors that might occur
+  useEffect(() => {
+    if (error) {
+      toast.error(`Error: ${error}`);
+    }
+  }, [error]);
 
   const handleRefresh = async () => {
+    if (isLoading || refreshing) return;
+    
     setRefreshing(true);
     try {
       await fetchAffiliateOverviews();

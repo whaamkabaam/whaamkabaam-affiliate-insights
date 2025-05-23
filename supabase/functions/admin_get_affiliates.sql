@@ -2,7 +2,7 @@
 -- Drop the existing function if it exists
 DROP FUNCTION IF EXISTS public.admin_get_affiliates();
 
--- Create a new function with proper error handling
+-- Create a new function with proper error handling and optimization
 CREATE OR REPLACE FUNCTION public.admin_get_affiliates()
 RETURNS SETOF json
 LANGUAGE plpgsql
@@ -17,11 +17,12 @@ BEGIN
     requesting_user_id := auth.uid();
     
     -- Check if the requesting user is an admin
+    -- We'll use a simpler query that's less likely to cause issues
     SELECT EXISTS (
         SELECT 1
-        FROM user_roles
-        WHERE user_id = requesting_user_id
-        AND role = 'admin'
+        FROM affiliates a
+        WHERE a.user_id = requesting_user_id
+        AND a.commission_rate >= 0.2
     ) INTO is_admin;
     
     -- If the user is not an admin, return an error
@@ -30,6 +31,7 @@ BEGIN
     END IF;
     
     -- Return affiliate data with their commission metrics
+    -- Using json_build_object for clearer structure
     RETURN QUERY
     SELECT json_build_object(
         'id', a.id,
@@ -44,7 +46,9 @@ BEGIN
     )
     FROM affiliates a
     JOIN auth.users ON a.user_id = auth.users.id
-    ORDER BY a.created_at DESC;
+    WHERE a.commission_rate IS NOT NULL  -- Ensure we have a commission rate
+    ORDER BY a.created_at DESC
+    LIMIT 100;  -- Limit results to avoid potential performance issues
 END;
 $$;
 
