@@ -25,6 +25,15 @@ export interface MonthlyStats {
   customerCount: number;
 }
 
+export interface AffiliateOverview {
+  email: string;
+  affiliateCode: string;
+  commissionRate: number;
+  totalCommission: number;
+  totalRevenue: number;
+  customerCount: number;
+}
+
 interface AffiliateContextType {
   commissions: Commission[];
   isLoading: boolean;
@@ -33,12 +42,16 @@ interface AffiliateContextType {
   getMonthlyStats: (year: number, month: number) => Promise<MonthlyStats>;
   fetchCommissionData: (year: number, month: number) => Promise<void>;
   monthlyStats: Record<string, MonthlyStats>;
+  // New fields for admin overview
+  affiliateOverviews: AffiliateOverview[];
+  fetchAffiliateOverviews: () => Promise<void>;
+  isAdmin: boolean;
 }
 
 const AffiliateContext = createContext<AffiliateContextType | undefined>(undefined);
 
 export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAdmin } = useAuth();
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +61,53 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     totalCommission: 0,
     customerCount: 0,
   });
+  const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
+
+  // Function for admin to fetch overview of all affiliates
+  const fetchAffiliateOverviews = async () => {
+    if (!isAuthenticated || !isAdmin) {
+      setError("Not authorized to view affiliate overviews");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Use RPC function to get affiliate data
+      const { data, error } = await supabase.rpc('admin_get_affiliates');
+      
+      if (error) {
+        console.error('RPC error:', error);
+        toast.error('Failed to load affiliate data');
+        setAffiliateOverviews([]);
+        return;
+      }
+      
+      if (data && Array.isArray(data)) {
+        // Process the data into the correct format
+        const overviews: AffiliateOverview[] = data.map(item => ({
+          email: item.email || '',
+          affiliateCode: item.affiliate_code || '',
+          commissionRate: Number(item.commission_rate) || 0,
+          totalCommission: Number(item.total_commission) || 0,
+          totalRevenue: Number(item.total_sales) || 0,
+          customerCount: Number(item.customer_count) || 0
+        }));
+        
+        setAffiliateOverviews(overviews);
+      } else {
+        console.error('Unexpected data format from RPC:', data);
+        setAffiliateOverviews([]);
+      }
+    } catch (err) {
+      console.error("Error fetching affiliate overviews:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch affiliate data");
+      setAffiliateOverviews([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchCommissionData = async (year: number, month: number) => {
     if (!isAuthenticated || !user) {
@@ -55,7 +115,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (!user.affiliateCode) {
+    if (!user.affiliateCode && !isAdmin) {
       setError("User does not have an affiliate code");
       return;
     }
@@ -64,9 +124,28 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
+      // If admin user, fetch a summary instead of personal affiliate data
+      if (isAdmin) {
+        // Optionally can add specific admin data here if needed
+        // For now, just fetch affiliate overviews for admin
+        await fetchAffiliateOverviews();
+        
+        // Sample data for admin dashboard - could be replaced with actual aggregated data
+        setSummary({
+          totalRevenue: 0,
+          totalCommission: 0,
+          customerCount: 0,
+        });
+        
+        // Reset commissions for admin as they don't have personal commissions
+        setCommissions([]);
+        setIsLoading(false);
+        return;
+      }
+      
       console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}`);
       
-      // Call our Supabase Edge Function to get the real data from Stripe
+      // For regular affiliates, call our Supabase Edge Function to get their data
       const { data, error } = await supabase.functions.invoke<{
         commissions: Commission[];
         summary: CommissionSummary;
@@ -137,6 +216,11 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getMonthlyStats = async (year: number, month: number): Promise<MonthlyStats> => {
+    // Skip for admin users
+    if (isAdmin) {
+      return { totalCommission: 0, customerCount: 0 };
+    }
+    
     const key = `${year}-${month.toString().padStart(2, '0')}`;
     
     if (monthlyStats[key]) {
@@ -152,6 +236,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Effect to fetch initial affiliate overview data for admin users
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
+      fetchAffiliateOverviews();
+    }
+  }, [isAuthenticated, isAdmin]);
+
   const value = {
     commissions,
     isLoading,
@@ -160,6 +251,9 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     getMonthlyStats,
     fetchCommissionData,
     monthlyStats,
+    affiliateOverviews,
+    fetchAffiliateOverviews,
+    isAdmin
   };
 
   return <AffiliateContext.Provider value={value}>{children}</AffiliateContext.Provider>;

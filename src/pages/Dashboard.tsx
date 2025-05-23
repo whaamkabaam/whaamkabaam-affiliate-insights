@@ -12,16 +12,24 @@ import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/MonthPicker";
 import { DollarSign, Users, TrendingUp, Calendar, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { fetchCommissionData, summary, isLoading, error } = useAffiliate();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // If the user is an admin, redirect them to the admin dashboard
+    if (isAdmin) {
+      navigate("/admin");
+      return;
+    }
+
     fetchCommissionData(selectedYear, selectedMonth);
-  }, [fetchCommissionData, selectedYear, selectedMonth]);
+  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate]);
 
   useEffect(() => {
     if (error) {

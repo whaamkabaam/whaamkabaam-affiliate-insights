@@ -15,7 +15,7 @@ interface CommissionTableProps {
 }
 
 export function CommissionTable({ limit }: CommissionTableProps) {
-  const { commissions, isLoading } = useAffiliate();
+  const { commissions, isLoading, isAdmin } = useAffiliate();
 
   const displayCommissions = limit
     ? commissions.slice(0, limit)
@@ -23,6 +23,14 @@ export function CommissionTable({ limit }: CommissionTableProps) {
 
   if (isLoading) {
     return <div className="text-center py-4">Loading commission data...</div>;
+  }
+
+  if (isAdmin) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        Detailed commission data is available in individual affiliate accounts.
+      </div>
+    );
   }
 
   if (displayCommissions.length === 0) {

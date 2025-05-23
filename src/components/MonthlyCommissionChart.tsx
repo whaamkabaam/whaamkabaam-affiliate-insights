@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 
 export function MonthlyCommissionChart() {
-  const { getMonthlyStats } = useAffiliate();
+  const { getMonthlyStats, isAdmin } = useAffiliate();
   const [chartData, setChartData] = useState<{ month: string; commission: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +15,19 @@ export function MonthlyCommissionChart() {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
+      
+      // If admin, show placeholder or aggregate data
+      if (isAdmin) {
+        setChartData([
+          { month: "Jan", commission: 0 },
+          { month: "Feb", commission: 0 },
+          { month: "Mar", commission: 0 },
+          { month: "Apr", commission: 0 },
+          { month: "May", commission: 0 }
+        ]);
+        setIsLoading(false);
+        return;
+      }
       
       const currentYear = new Date().getFullYear();
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -46,7 +59,7 @@ export function MonthlyCommissionChart() {
     };
 
     fetchData();
-  }, [getMonthlyStats]);
+  }, [getMonthlyStats, isAdmin]);
 
   if (isLoading) {
     return (
@@ -71,6 +84,23 @@ export function MonthlyCommissionChart() {
           <div className="text-red-500 flex flex-col items-center gap-2">
             <AlertCircle className="w-8 h-8" />
             <p>{error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // For admin, show placeholder text instead of chart
+  if (isAdmin) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly Commission</CardTitle>
+        </CardHeader>
+        <CardContent className="h-80 flex items-center justify-center">
+          <div className="text-muted-foreground text-center">
+            <p>Aggregate commission data for all affiliates</p>
+            <p className="mt-2">Visit specific affiliate accounts to view detailed charts</p>
           </div>
         </CardContent>
       </Card>
