@@ -65,6 +65,39 @@ export function CommissionTable({ limit }: CommissionTableProps) {
     return products[productId] || productId;
   };
 
+  const formatCustomerName = (email: string) => {
+    // Extract name from email (assuming format is firstname.lastname@domain.com)
+    const [namePart] = email.split('@');
+    let firstName = '';
+    let lastName = '';
+    
+    if (namePart.includes('.')) {
+      // If email has format firstname.lastname@domain
+      [firstName, lastName] = namePart.split('.');
+    } else {
+      // If no period in the name part, assume the whole thing is the first name
+      firstName = namePart;
+      lastName = '';
+    }
+    
+    // Capitalize first letters for better display
+    firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+    if (lastName) {
+      lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+    }
+    
+    // Format first name (first letter + *** + last letter)
+    let formattedFirstName = firstName;
+    if (firstName.length > 2) {
+      formattedFirstName = `${firstName.charAt(0)}***${firstName.charAt(firstName.length - 1)}`;
+    }
+    
+    // Format last name (just first letter with a period)
+    const formattedLastName = lastName ? `${lastName.charAt(0)}.` : '';
+    
+    return `${formattedFirstName} ${formattedLastName}`.trim();
+  };
+
   return (
     <div className="border rounded-md">
       <Table>
@@ -81,7 +114,12 @@ export function CommissionTable({ limit }: CommissionTableProps) {
           {displayCommissions.map((commission) => (
             <TableRow key={commission.sessionId}>
               <TableCell>{formatDate(commission.date)}</TableCell>
-              <TableCell>{commission.customerEmail}</TableCell>
+              <TableCell>
+                {formatCustomerName(commission.customerEmail)}
+                <div className="text-xs text-muted-foreground">
+                  {commission.customerEmail}
+                </div>
+              </TableCell>
               <TableCell>{formatProductName(commission.productId)}</TableCell>
               <TableCell className="text-right">${commission.amount.toFixed(2)}</TableCell>
               <TableCell className="text-right font-medium text-primary">
