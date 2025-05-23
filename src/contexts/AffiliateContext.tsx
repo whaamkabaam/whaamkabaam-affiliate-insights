@@ -86,8 +86,8 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (data && Array.isArray(data)) {
-        // Process the data into the correct format with proper type handling
-        const overviews: AffiliateOverview[] = data.map((item: AffiliateRpcResponse) => ({
+        // Process the data into the correct format with proper type casting
+        const overviews: AffiliateOverview[] = data.map((item: any) => ({
           email: item.email || '',
           affiliateCode: item.affiliate_code || '',
           commissionRate: Number(item.commission_rate) || 0,

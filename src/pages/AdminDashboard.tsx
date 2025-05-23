@@ -10,6 +10,14 @@ import { toast } from "sonner";
 import { InitializeUsers } from "@/components/InitializeUsers";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
@@ -77,24 +85,24 @@ export default function AdminDashboard() {
                   </div>
                 ) : affiliateOverviews.length > 0 ? (
                   <div className="border rounded-md overflow-hidden">
-                    <table className="min-w-full divide-y divide-muted">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Email</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Code</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground tracking-wider">Commission</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-muted">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Code</TableHead>
+                          <TableHead>Commission</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {affiliateOverviews.map((affiliate, i) => (
-                          <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm">{affiliate.email}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm">{affiliate.affiliateCode}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm">{(affiliate.commissionRate * 100).toFixed(0)}%</td>
-                          </tr>
+                          <TableRow key={i}>
+                            <TableCell>{affiliate.email}</TableCell>
+                            <TableCell>{affiliate.affiliateCode}</TableCell>
+                            <TableCell>{(affiliate.commissionRate * 100).toFixed(0)}%</TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
