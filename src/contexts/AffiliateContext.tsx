@@ -50,6 +50,12 @@ interface AffiliateContextType {
   isAdmin: boolean;
 }
 
+const defaultSummary: CommissionSummary = {
+  totalRevenue: 0,
+  totalCommission: 0,
+  customerCount: 0
+};
+
 const AffiliateContext = createContext<AffiliateContextType | undefined>(undefined);
 
 export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
@@ -58,14 +64,11 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [monthlyStats, setMonthlyStats] = useState<Record<string, MonthlyStats>>({});
-  const [summary, setSummary] = useState<CommissionSummary>({
-    totalRevenue: 0,
-    totalCommission: 0,
-    customerCount: 0,
-  });
+  const [summary, setSummary] = useState<CommissionSummary>(defaultSummary);
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
   const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
+  const [fetchedMonthYearCombos, setFetchedMonthYearCombos] = useState<Set<string>>(new Set());
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
   const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
@@ -133,7 +136,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAuthenticated, isAdmin, lastFetchTimestamp]);
 
-  const fetchCommissionData = async (year: number, month: number) => {
+  const fetchCommissionData = useCallback(async (year: number, month: number) => {
     if (!isAuthenticated || !user) {
       setError("User not authenticated");
       return;
@@ -146,11 +149,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       
       // Set empty commission data for admin users
       setCommissions([]);
-      setSummary({
-        totalRevenue: 0,
-        totalCommission: 0,
-        customerCount: 0,
-      });
+      setSummary(defaultSummary);
       
       return;
     }
@@ -163,6 +162,14 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
 
     // Generate a unique key for this fetch operation to prevent duplicate fetches
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
+    
+    // Check if we've already fetched this month's data
+    if (fetchedMonthYearCombos.has(fetchKey)) {
+      console.log(`Already fetched data for ${fetchKey}, using cached data`);
+      return;
+    }
+    
+    // Check if we're already fetching the same data
     if (currentFetchKey === fetchKey && isLoading) {
       console.log(`Already fetching data for ${fetchKey}`);
       return;
@@ -202,10 +209,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       console.log(`Received ${data.commissions?.length || 0} commissions`);
       
       setCommissions(data.commissions || []);
-      setSummary(data.summary || {
-        totalRevenue: 0,
-        totalCommission: 0,
-        customerCount: 0,
+      setSummary(data.summary || defaultSummary);
+      
+      // Add this fetch to our tracking set
+      setFetchedMonthYearCombos(prev => {
+        const newSet = new Set(prev);
+        newSet.add(fetchKey);
+        return newSet;
       });
       
       // Update monthly stats
@@ -227,9 +237,9 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
       setCurrentFetchKey(null);
     }
-  };
+  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, fetchedMonthYearCombos]);
 
-  const getMonthlyStats = async (year: number, month: number): Promise<MonthlyStats> => {
+  const getMonthlyStats = useCallback(async (year: number, month: number): Promise<MonthlyStats> => {
     // Skip for admin users
     if (isAdmin) {
       return { totalCommission: 0, customerCount: 0 };
@@ -241,6 +251,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return monthlyStats[key];
     }
     
+    // Generate a fetch key to check if we've already attempted to fetch this data
+    const fetchKey = `${user?.affiliateCode}-${year}-${month}`;
+    if (fetchedMonthYearCombos.has(fetchKey)) {
+      // Return existing stats or defaults if no data was found
+      return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
+    }
+    
     try {
       await fetchCommissionData(year, month);
       return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
@@ -248,7 +265,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       console.error(`Error in getMonthlyStats for ${year}-${month}:`, error);
       return { totalCommission: 0, customerCount: 0 };
     }
-  };
+  }, [isAdmin, monthlyStats, user?.affiliateCode, fetchedMonthYearCombos, fetchCommissionData]);
 
   // Effect to fetch initial affiliate overview data for admin users with delayed initialization
   useEffect(() => {
@@ -272,6 +289,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       isMounted = false;
     };
   }, [isAuthenticated, isAdmin, fetchAffiliateOverviews]);
+
+  // Reset the fetch tracking when the user changes
+  useEffect(() => {
+    if (user?.affiliateCode) {
+      setFetchedMonthYearCombos(new Set());
+    }
+  }, [user?.affiliateCode]);
 
   const value = {
     commissions,

@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [dataRefreshing, setDataRefreshing] = useState(false);
+  const [dataFetchInitiated, setDataFetchInitiated] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,15 +30,17 @@ export default function Dashboard() {
       return;
     }
 
-    // Only fetch data if we're not already loading
-    if (!isLoading) {
+    // Only fetch data if we haven't already initiated a fetch
+    // and we're not already loading or refreshing
+    if (!dataFetchInitiated && !isLoading && !dataRefreshing) {
+      setDataFetchInitiated(true);
       setDataRefreshing(true);
       fetchCommissionData(selectedYear, selectedMonth)
         .finally(() => {
           setDataRefreshing(false);
         });
     }
-  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, isLoading]);
+  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, isLoading, dataRefreshing, dataFetchInitiated]);
 
   useEffect(() => {
     if (error) {
@@ -46,8 +49,12 @@ export default function Dashboard() {
   }, [error]);
 
   const handleMonthChange = (year: number, month: number) => {
-    setSelectedYear(year);
-    setSelectedMonth(month);
+    // Only trigger a data refetch if the year or month changes
+    if (year !== selectedYear || month !== selectedMonth) {
+      setSelectedYear(year);
+      setSelectedMonth(month);
+      setDataFetchInitiated(false); // Reset fetch flag when month changes
+    }
   };
 
   const handleCopyLink = () => {
@@ -57,6 +64,112 @@ export default function Dashboard() {
         .then(() => toast.success("Affiliate link copied to clipboard"))
         .catch(() => toast.error("Failed to copy link"));
     }
+  };
+
+  const handleRefresh = () => {
+    if (!dataRefreshing) {
+      setDataFetchInitiated(false);
+    }
+  };
+
+  // Render loading state for the initial load
+  // but still show partial data that we have
+  const renderDashboardContent = () => {
+    if (isLoading && !summary) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading your commission data...</span>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatsCard
+            title="Total Commission"
+            value={`$${summary.totalCommission.toFixed(2)}`}
+            description={`For ${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`}
+            icon={<DollarSign className="w-4 h-4" />}
+            className="bg-primary/5"
+          />
+          <StatsCard
+            title="Total Revenue"
+            value={`$${summary.totalRevenue.toFixed(2)}`}
+            description="Generated through your affiliate link"
+            icon={<TrendingUp className="w-4 h-4" />}
+          />
+          <StatsCard
+            title="New Customers"
+            value={summary.customerCount}
+            description="People who used your affiliate code"
+            icon={<Users className="w-4 h-4" />}
+          />
+          <StatsCard
+            title="Your Code"
+            value={user?.affiliateCode || ""}
+            description="Share this code with your audience"
+            icon={<Calendar className="w-4 h-4" />}
+            className="bg-secondary/10"
+          />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="md:col-span-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle>Your Affiliate Link</CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleCopyLink}
+              >
+                Copy
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-muted p-3 rounded-md overflow-x-auto">
+                <code className="text-sm">https://whaamkabaam.com/?ref={user?.affiliateCode}</code>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <MonthlyCommissionChart />
+        </div>
+        
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
+            {dataRefreshing && (
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing data...
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing}>
+                {dataRefreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button variant="outline" size="sm">
+                View All
+              </Button>
+            </div>
+          </div>
+          <CommissionTable limit={5} />
+        </div>
+
+        {error && (
+          <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </>
+    );
   };
 
   return (
@@ -75,92 +188,7 @@ export default function Dashboard() {
             <MonthPicker onMonthChange={handleMonthChange} />
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-lg">Loading your commission data...</span>
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatsCard
-                  title="Total Commission"
-                  value={`$${summary.totalCommission.toFixed(2)}`}
-                  description={`For ${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`}
-                  icon={<DollarSign className="w-4 h-4" />}
-                  className="bg-primary/5"
-                />
-                <StatsCard
-                  title="Total Revenue"
-                  value={`$${summary.totalRevenue.toFixed(2)}`}
-                  description="Generated through your affiliate link"
-                  icon={<TrendingUp className="w-4 h-4" />}
-                />
-                <StatsCard
-                  title="New Customers"
-                  value={summary.customerCount}
-                  description="People who used your affiliate code"
-                  icon={<Users className="w-4 h-4" />}
-                />
-                <StatsCard
-                  title="Your Code"
-                  value={user?.affiliateCode || ""}
-                  description="Share this code with your audience"
-                  icon={<Calendar className="w-4 h-4" />}
-                  className="bg-secondary/10"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="md:col-span-3">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                    <CardTitle>Your Affiliate Link</CardTitle>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleCopyLink}
-                    >
-                      Copy
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-muted p-3 rounded-md overflow-x-auto">
-                      <code className="text-sm">https://whaamkabaam.com/?ref={user?.affiliateCode}</code>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <MonthlyCommissionChart />
-              </div>
-              
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
-                  {dataRefreshing && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Refreshing data...
-                    </div>
-                  )}
-                  <Button variant="outline" size="sm">
-                    View All
-                  </Button>
-                </div>
-                <CommissionTable limit={5} />
-              </div>
-
-              {error && (
-                <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                      <p className="text-sm text-red-500">{error}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
+          {renderDashboardContent()}
         </main>
       </div>
     </div>

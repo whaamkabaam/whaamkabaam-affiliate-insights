@@ -11,23 +11,33 @@ export function MonthlyCommissionChart() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
+      // Avoid fetching if we're already fetching data
+      if (isRefreshing) return;
+      
+      // Mark that we've attempted to fetch data
+      setDataFetchAttempted(true);
       setIsRefreshing(true);
       setError(null);
       
       // If admin, show placeholder or aggregate data
       if (isAdmin) {
-        setChartData([
-          { month: "Jan", commission: 0 },
-          { month: "Feb", commission: 0 },
-          { month: "Mar", commission: 0 },
-          { month: "Apr", commission: 0 },
-          { month: "May", commission: 0 }
-        ]);
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (isMounted) {
+          setChartData([
+            { month: "Jan", commission: 0 },
+            { month: "Feb", commission: 0 },
+            { month: "Mar", commission: 0 },
+            { month: "Apr", commission: 0 },
+            { month: "May", commission: 0 }
+          ]);
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
         return;
       }
       
@@ -43,28 +53,41 @@ export function MonthlyCommissionChart() {
         
         try {
           const stats = await getMonthlyStats(currentYear, month);
-          data.push({
-            month: monthNames[month - 1],
-            commission: Number(stats.totalCommission.toFixed(2)),
-          });
+          if (isMounted) {
+            data.push({
+              month: monthNames[month - 1],
+              commission: Number(stats.totalCommission.toFixed(2)),
+            });
+          }
         } catch (error) {
           console.error(`Failed to fetch stats for ${currentYear}-${month}:`, error);
-          setError("Failed to fetch commission data. Please try again later.");
-          data.push({
-            month: monthNames[month - 1],
-            commission: 0,
-          });
+          if (isMounted) {
+            setError("Failed to fetch commission data. Please try again later.");
+            data.push({
+              month: monthNames[month - 1],
+              commission: 0,
+            });
+          }
         }
       }
-      setChartData(data);
-      setIsLoading(false);
-      setIsRefreshing(false);
+      
+      if (isMounted) {
+        setChartData(data);
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     };
 
-    fetchData();
-  }, [getMonthlyStats, isAdmin]);
+    if (!dataFetchAttempted) {
+      fetchData();
+    }
 
-  if (isLoading) {
+    return () => {
+      isMounted = false;
+    };
+  }, [getMonthlyStats, isAdmin, isRefreshing, dataFetchAttempted]);
+
+  if (isLoading && !chartData.length) {
     return (
       <Card className="lg:col-span-4">
         <CardHeader>
@@ -80,7 +103,7 @@ export function MonthlyCommissionChart() {
     );
   }
 
-  if (error) {
+  if (error && !chartData.length) {
     return (
       <Card className="lg:col-span-4">
         <CardHeader>
