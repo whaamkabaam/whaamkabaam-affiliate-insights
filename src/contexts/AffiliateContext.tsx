@@ -63,16 +63,26 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     customerCount: 0,
   });
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
+  const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
-  const fetchAffiliateOverviews = useCallback(async (retryCount = 0) => {
+  const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
     if (!isAuthenticated || !isAdmin) {
       setError("Not authorized to view affiliate overviews");
       return;
     }
-
+    
+    // Add throttling to prevent too many fetches in quick succession
+    // Only fetch if it's been more than 5 seconds since the last fetch or if force=true
+    const now = Date.now();
+    if (!force && now - lastFetchTimestamp < 5000) {
+      console.log("Skipping affiliate fetch - too soon since last fetch");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
+    setLastFetchTimestamp(now);
 
     try {
       console.log("Fetching affiliate overviews...");
@@ -87,7 +97,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
         // If we haven't tried too many times yet, retry after a delay
         if (retryCount < 2) {
           console.log(`Retrying... (${retryCount + 1})`);
-          setTimeout(() => fetchAffiliateOverviews(retryCount + 1), 1000 * (retryCount + 1));
+          setTimeout(() => fetchAffiliateOverviews(retryCount + 1, true), 1000 * (retryCount + 1));
           return;
         }
         
@@ -119,7 +129,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, lastFetchTimestamp]);
 
   const fetchCommissionData = async (year: number, month: number) => {
     if (!isAuthenticated || !user) {
@@ -255,7 +265,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       // Add a small delay to allow the auth context to fully initialize
       const timer = setTimeout(() => {
         if (isMounted) {
-          fetchAffiliateOverviews();
+          fetchAffiliateOverviews(0, true);
         }
       }, 500);
       

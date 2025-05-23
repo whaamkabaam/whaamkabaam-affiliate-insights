@@ -29,6 +29,7 @@ export default function AdminDashboard() {
   const [syncingStripe, setSyncingStripe] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  const [progressPolling, setProgressPolling] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -54,6 +55,48 @@ export default function AdminDashboard() {
       toast.error(`Error: ${error}`);
     }
   }, [error]);
+
+  // Effect for polling progress during sync
+  useEffect(() => {
+    if (!syncingStripe) {
+      if (progressPolling) {
+        clearInterval(progressPolling);
+        setProgressPolling(null);
+      }
+      return;
+    }
+
+    // Start polling for progress updates if we're syncing
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('system_settings')
+          .select('value, updated_at')
+          .eq('key', 'stripe_sync_progress')
+          .single();
+          
+        if (!error && data && data.value.progress !== undefined) {
+          setSyncProgress(data.value.progress);
+          
+          // If progress is 100%, we're done
+          if (data.value.progress >= 100) {
+            setSyncingStripe(false);
+            fetchAffiliateOverviews();
+            clearInterval(pollInterval);
+            setProgressPolling(null);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling progress:", err);
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    setProgressPolling(pollInterval);
+    
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [syncingStripe]);
 
   const fetchLastSyncTime = async () => {
     try {
@@ -95,6 +138,15 @@ export default function AdminDashboard() {
     toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
     
     try {
+      // Initialize the progress tracking
+      await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'stripe_sync_progress',
+          value: { progress: 0 },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+      
       // Call the edge function using Supabase client
       const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
         method: "POST",
@@ -118,7 +170,6 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Error syncing Stripe data:", error);
       toast.error(`Failed to sync Stripe data: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
       setSyncingStripe(false);
       setSyncProgress(null);
     }

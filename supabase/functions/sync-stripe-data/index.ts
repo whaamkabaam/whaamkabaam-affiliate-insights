@@ -1,5 +1,4 @@
 
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0'
 import { Stripe } from 'https://esm.sh/stripe@14.22.0'
@@ -68,7 +67,11 @@ serve(async (req: Request) => {
     }
     
     // Parse request body for options
-    let options = {};
+    let options = {
+      fullRefresh: false,
+      progressCallback: false
+    };
+    
     try {
       options = await req.json();
       console.log("Request options:", options);
@@ -231,6 +234,26 @@ serve(async (req: Request) => {
       }
     }
     
+    // Function to update progress
+    async function updateProgress(progress: number): Promise<void> {
+      // Send progress update through SSE if supported
+      // For now, we'll just store it in the database
+      try {
+        const { error } = await supabase
+          .from('system_settings')
+          .update({
+            value: { progress: progress },
+          })
+          .eq('key', 'stripe_sync_progress');
+        
+        if (error) {
+          console.error('Error updating progress:', error);
+        }
+      } catch (err) {
+        console.error('Error in updateProgress:', err);
+      }
+    }
+    
     // Determine the created_at filter based on full_refresh option or last timestamp
     const fullRefresh = options?.fullRefresh === true;
     let createdAfter: number;
@@ -251,15 +274,25 @@ serve(async (req: Request) => {
     let saved = 0;
     let skipped = 0;
     let errors = 0;
+    let totalEstimated = 0;
     
     try {
+      // First, get an estimate of the total number of sessions to process
+      const countResult = await stripe.checkout.sessions.list({
+        limit: 1,
+        created: { gt: createdAfter },
+      });
+      
+      // Roughly estimate total based on has_more flag
+      totalEstimated = countResult.has_more ? 100 : countResult.data.length;
+      
       // Create a paginated query with auto-pagination
       let hasMore = true;
       let startingAfter = null;
       
       while (hasMore) {
-        // Update timestamp at the beginning of each page to bookmark progress
-        // This ensures that even if the function times out, we won't start from the beginning
+        // Important: Update bookmark before processing any data
+        // This ensures that even if the function times out, we don't start from the beginning
         await updateLastRefreshTimestamp();
         
         const queryParams: any = {
@@ -282,7 +315,16 @@ serve(async (req: Request) => {
         
         // Fetch sessions from Stripe with expanded data
         const sessions = await stripe.checkout.sessions.list(queryParams);
-        console.log(`Retrieved ${sessions.data.length} sessions`);
+        
+        // Adjust our estimate now that we have more data
+        if (totalEstimated < sessions.data.length) {
+          totalEstimated = sessions.data.length;
+        }
+        if (sessions.has_more && totalEstimated < 500) {
+          totalEstimated *= 2;
+        }
+        
+        console.log(`Retrieved ${sessions.data.length} sessions, estimated total: ${totalEstimated}`);
         
         // Collect records for batch processing
         const batch: PromoCodeSale[] = [];
@@ -301,6 +343,12 @@ serve(async (req: Request) => {
               saved++;
             } else {
               skipped++;
+            }
+            
+            // Update progress every 10 sessions
+            if (processed % 10 === 0) {
+              const progressPercent = Math.min(Math.round((processed / totalEstimated) * 100), 99);
+              await updateProgress(progressPercent);
             }
           } catch (error) {
             console.error(`Error processing session ${session.id}: ${error}`);
@@ -328,6 +376,25 @@ serve(async (req: Request) => {
         // Update pagination for next batch
         if (sessions.has_more && sessions.data.length > 0) {
           startingAfter = sessions.data[sessions.data.length - 1].id;
+          
+          // Store this as our latest checkpoint so we don't have to start over
+          // if the process is interrupted
+          const checkpointSession = sessions.data[sessions.data.length - 1];
+          if (checkpointSession?.created) {
+            await supabase
+              .from('system_settings')
+              .update({ 
+                value: { 
+                  timestamp: new Date(checkpointSession.created * 1000).toISOString(),
+                  last_id: checkpointSession.id,
+                  processed: processed,
+                  saved: saved,
+                  progress: Math.min(Math.round((processed / totalEstimated) * 100), 99)
+                }
+              })
+              .eq('key', 'stripe_sync_progress');
+          }
+          
           console.log(`More sessions available, continuing with cursor: ${startingAfter}`);
         } else {
           hasMore = false;
@@ -335,8 +402,10 @@ serve(async (req: Request) => {
         }
       }
       
-      // Update the last refresh timestamp one final time
+      // Update the last refresh timestamp one final time and mark sync as complete (100%)
       await updateLastRefreshTimestamp();
+      await updateProgress(100);
+      
       console.log(`Sync complete: processed ${processed}, saved ${saved}, skipped ${skipped}, errors ${errors}`);
       
       // Return summary with CORS headers
