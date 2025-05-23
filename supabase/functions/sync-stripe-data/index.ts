@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0'
 import { Stripe } from 'https://esm.sh/stripe@14.22.0'
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Environment variables
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
@@ -15,13 +16,6 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
 })
-
-// Set up CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
 
 interface SystemSettings {
   timestamp: string;
@@ -129,33 +123,16 @@ serve(async (req: Request) => {
           return null;
         }
         
-        // Get line items for this session
-        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
-        
-        if (!lineItems.data || lineItems.data.length === 0) {
-          console.log(`No line items found for session ${session.id}`);
-          return null;
-        }
-        
-        // Get product details if available
+        // No need to make separate API calls - use the expanded data
         let productId = null;
         let productName = null;
         
-        if (lineItems.data[0]?.price?.product) {
-          const productIdOrObj = lineItems.data[0].price.product;
-          productId = typeof productIdOrObj === 'string' ? productIdOrObj : productIdOrObj.id;
-          
-          if (typeof productIdOrObj !== 'string') {
-            productName = productIdOrObj.name;
-          } else {
-            // If we only have the product ID, fetch the product details
-            try {
-              const product = await stripe.products.retrieve(productId);
-              productName = product.name;
-            } catch (error) {
-              console.error(`Error fetching product details: ${error}`);
-            }
-          }
+        // Get line items from the expanded session data
+        const lineItem = session.line_items?.data?.[0];
+        if (lineItem?.price?.product) {
+          const product = lineItem.price.product;
+          productId = typeof product === 'string' ? product : product.id;
+          productName = typeof product === 'string' ? null : product.name;
         }
         
         // Get promo code information
@@ -168,26 +145,23 @@ serve(async (req: Request) => {
         if (session.total_details?.breakdown?.discounts && 
             session.total_details.breakdown.discounts.length > 0) {
           
-          // Get the promotion code ID
+          // Get the promotion code from expanded data
           const discount = session.total_details.breakdown.discounts[0];
-          if (discount.discount?.promotion_code) {
-            promoCodeId = discount.discount.promotion_code;
+          if (discount.discount) {
+            promoCodeId = discount.discount.promotion_code || discount.discount.id;
             
-            // Get the promo code details
-            try {
-              const promoCode = await stripe.promotionCodes.retrieve(promoCodeId);
-              promoCodeName = promoCode.code;
-              
-              // Map the promo code to an affiliate
-              if (promoCodeName) {
-                const affiliateInfo = await getAffiliateCodeByPromoCode(promoCodeName);
-                if (affiliateInfo) {
-                  affiliateCode = affiliateInfo.code;
-                  affiliateRate = affiliateInfo.rate;
-                }
+            if (discount.discount.promotion_code) {
+              // Get promo code from expanded data if available
+              promoCodeName = discount.discount.code;
+            }
+            
+            // If we have a promo code name, map it to an affiliate
+            if (promoCodeName) {
+              const affiliateInfo = await getAffiliateCodeByPromoCode(promoCodeName);
+              if (affiliateInfo) {
+                affiliateCode = affiliateInfo.code;
+                affiliateRate = affiliateInfo.rate;
               }
-            } catch (error) {
-              console.error(`Error fetching promo code details: ${error}`);
             }
           }
         }
@@ -283,10 +257,20 @@ serve(async (req: Request) => {
       let startingAfter = null;
       
       while (hasMore) {
+        // Update timestamp at the beginning of each page to bookmark progress
+        // This ensures that even if the function times out, we won't start from the beginning
+        await updateLastRefreshTimestamp();
+        
         const queryParams: any = {
           limit: 100,
           created: { gt: createdAfter },
-          expand: ['total_details.breakdown.discounts', 'customer_details'],
+          // Expand the data we need to avoid additional API calls
+          expand: [
+            'data.line_items',
+            'data.line_items.data.price.product',
+            'data.total_details.breakdown.discounts.discount',
+            'data.customer_details'
+          ]
         };
         
         if (startingAfter) {
@@ -295,39 +279,48 @@ serve(async (req: Request) => {
         
         console.log(`Fetching batch of sessions, params:`, queryParams);
         
-        // Fetch sessions from Stripe
+        // Fetch sessions from Stripe with expanded data
         const sessions = await stripe.checkout.sessions.list(queryParams);
         console.log(`Retrieved ${sessions.data.length} sessions`);
+        
+        // Collect records for batch processing
+        const batch: PromoCodeSale[] = [];
         
         // Process each session
         for (const session of sessions.data) {
           processed++;
           
           try {
-            // Process each session - no need to re-fetch since we've expanded everything
+            // Process the session with expanded data
             const saleRecord = await processCheckoutSession(session);
             
             if (saleRecord) {
-              // Upsert the record into the database
-              const { error } = await supabase
-                .from('promo_code_sales')
-                .upsert(saleRecord, { 
-                  onConflict: 'session_id',
-                  ignoreDuplicates: false 
-                });
-              
-              if (error) {
-                console.error(`Error saving session ${session.id}: ${error.message}`);
-                errors++;
-              } else {
-                saved++;
-              }
+              // Add to batch instead of individual upsert
+              batch.push(saleRecord);
+              saved++;
             } else {
               skipped++;
             }
           } catch (error) {
             console.error(`Error processing session ${session.id}: ${error}`);
             errors++;
+          }
+        }
+        
+        // Batch upsert all processed records
+        if (batch.length > 0) {
+          const { error } = await supabase
+            .from('promo_code_sales')
+            .upsert(batch, { 
+              onConflict: 'session_id',
+              ignoreDuplicates: false 
+            });
+          
+          if (error) {
+            console.error(`Error batch upserting ${batch.length} records: ${error.message}`);
+            errors += batch.length;
+            // Adjust the saved count to account for failed saves
+            saved -= batch.length;
           }
         }
         
@@ -341,7 +334,7 @@ serve(async (req: Request) => {
         }
       }
       
-      // Update the last refresh timestamp
+      // Update the last refresh timestamp one final time
       await updateLastRefreshTimestamp();
       console.log(`Sync complete: processed ${processed}, saved ${saved}, skipped ${skipped}, errors ${errors}`);
       

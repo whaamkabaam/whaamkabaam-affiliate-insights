@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
@@ -39,14 +38,12 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Fetch affiliate data after a short delay
-    const timer = setTimeout(() => {
-      fetchAffiliateOverviews();
-      fetchLastSyncTime();
-    }, 500);
+    // Fetch only last sync time after a short delay
+    // Remove the duplicate fetchAffiliateOverviews call - let the provider handle it
+    const timer = setTimeout(fetchLastSyncTime, 500);
     
     return () => clearTimeout(timer);
-  }, [isAuthenticated, isAdmin, navigate, fetchAffiliateOverviews]);
+  }, [isAuthenticated, isAdmin, navigate]);
   
   // Display any errors that might occur
   useEffect(() => {
