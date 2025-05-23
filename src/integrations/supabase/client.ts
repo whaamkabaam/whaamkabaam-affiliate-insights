@@ -20,13 +20,7 @@ export interface Affiliate {
   created_at: string;
 }
 
-// Add interface for affiliate data from RPC function
-export interface AffiliateData {
-  affiliate_code?: string;
-  commission_rate?: number;
-}
-
-// Add interface for the JSON response from admin_get_affiliates
+// Define interface for the JSON response from admin_get_affiliates
 export interface AffiliateJson {
   id: string;
   user_id: string;
@@ -37,6 +31,12 @@ export interface AffiliateJson {
   total_sales: number;
   customer_count: number;
   created_at: string;
+}
+
+// Add interface for affiliate data from RPC function
+export interface AffiliateData {
+  affiliate_code?: string;
+  commission_rate?: number;
 }
 
 // RPC function return type helpers

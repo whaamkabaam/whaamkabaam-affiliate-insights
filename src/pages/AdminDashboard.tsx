@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -8,11 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { InitializeUsers } from "@/components/InitializeUsers";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
   const { affiliateOverviews, isLoading, fetchAffiliateOverviews } = useAffiliate();
   const navigate = useNavigate();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -29,19 +32,42 @@ export default function AdminDashboard() {
     fetchAffiliateOverviews();
   }, [isAuthenticated, isAdmin, navigate, fetchAffiliateOverviews]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchAffiliateOverviews();
+      toast.success("Affiliate data refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh affiliate data");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-muted/40">
       <Sidebar />
       <div className="flex-1">
         <DashboardHeader />
         <main className="grid gap-6 p-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Admin Dashboard</h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-semibold tracking-tight">Admin Dashboard</h1>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isLoading || refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh Data
+            </Button>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <InitializeUsers />
             
             <Card className="w-full">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle>Affiliates</CardTitle>
               </CardHeader>
               <CardContent>

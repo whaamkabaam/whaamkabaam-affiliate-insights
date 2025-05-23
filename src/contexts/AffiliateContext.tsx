@@ -42,7 +42,7 @@ interface AffiliateContextType {
   getMonthlyStats: (year: number, month: number) => Promise<MonthlyStats>;
   fetchCommissionData: (year: number, month: number) => Promise<void>;
   monthlyStats: Record<string, MonthlyStats>;
-  // New fields for admin overview
+  // Admin overview
   affiliateOverviews: AffiliateOverview[];
   fetchAffiliateOverviews: () => Promise<void>;
   isAdmin: boolean;
@@ -85,7 +85,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (data && Array.isArray(data)) {
-        // Process the data into the correct format
+        // Process the data into the correct format with proper type handling
         const overviews: AffiliateOverview[] = data.map(item => ({
           email: item.email || '',
           affiliateCode: item.affiliate_code || '',
@@ -115,7 +115,24 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (!user.affiliateCode && !isAdmin) {
+    // If the user is admin, they don't have personal affiliate data
+    // but we should still load the affiliate overviews for them
+    if (isAdmin) {
+      await fetchAffiliateOverviews();
+      
+      // Set empty commission data for admin users
+      setCommissions([]);
+      setSummary({
+        totalRevenue: 0,
+        totalCommission: 0,
+        customerCount: 0,
+      });
+      
+      return;
+    }
+
+    // Regular affiliate user without an affiliate code
+    if (!user.affiliateCode) {
       setError("User does not have an affiliate code");
       return;
     }
@@ -124,25 +141,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      // If admin user, fetch a summary instead of personal affiliate data
-      if (isAdmin) {
-        // Optionally can add specific admin data here if needed
-        // For now, just fetch affiliate overviews for admin
-        await fetchAffiliateOverviews();
-        
-        // Sample data for admin dashboard - could be replaced with actual aggregated data
-        setSummary({
-          totalRevenue: 0,
-          totalCommission: 0,
-          customerCount: 0,
-        });
-        
-        // Reset commissions for admin as they don't have personal commissions
-        setCommissions([]);
-        setIsLoading(false);
-        return;
-      }
-      
       console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}`);
       
       // For regular affiliates, call our Supabase Edge Function to get their data

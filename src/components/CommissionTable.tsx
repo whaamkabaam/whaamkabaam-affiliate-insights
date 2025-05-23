@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDistanceToNow } from "date-fns";
+import { AlertCircle } from "lucide-react";
 
 interface CommissionTableProps {
   limit?: number;
@@ -27,8 +28,9 @@ export function CommissionTable({ limit }: CommissionTableProps) {
 
   if (isAdmin) {
     return (
-      <div className="text-center py-4 text-muted-foreground">
-        Detailed commission data is available in individual affiliate accounts.
+      <div className="flex items-center justify-center py-4 text-muted-foreground">
+        <AlertCircle className="h-4 w-4 mr-2" />
+        <span>Detailed commission data is available in individual affiliate accounts</span>
       </div>
     );
   }
