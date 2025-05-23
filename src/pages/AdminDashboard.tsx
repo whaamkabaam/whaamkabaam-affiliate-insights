@@ -21,6 +21,11 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 
+// Define a type for the stripe sync progress value structure
+interface StripeSyncProgress {
+  progress: number;
+}
+
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
   const { affiliateOverviews, isLoading, fetchAffiliateOverviews, error } = useAffiliate();
@@ -29,7 +34,7 @@ export default function AdminDashboard() {
   const [syncingStripe, setSyncingStripe] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
-  const [progressPolling, setProgressPolling] = useState<number | null>(null);
+  const [progressPolling, setProgressPolling] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -75,15 +80,19 @@ export default function AdminDashboard() {
           .eq('key', 'stripe_sync_progress')
           .single();
           
-        if (!error && data && data.value.progress !== undefined) {
-          setSyncProgress(data.value.progress);
-          
-          // If progress is 100%, we're done
-          if (data.value.progress >= 100) {
-            setSyncingStripe(false);
-            fetchAffiliateOverviews();
-            clearInterval(pollInterval);
-            setProgressPolling(null);
+        if (!error && data) {
+          // Properly type check and handle the value structure
+          const valueObj = data.value as unknown as StripeSyncProgress;
+          if (valueObj && typeof valueObj.progress === 'number') {
+            setSyncProgress(valueObj.progress);
+            
+            // If progress is 100%, we're done
+            if (valueObj.progress >= 100) {
+              setSyncingStripe(false);
+              fetchAffiliateOverviews();
+              clearInterval(pollInterval);
+              setProgressPolling(null);
+            }
           }
         }
       } catch (err) {
@@ -91,6 +100,7 @@ export default function AdminDashboard() {
       }
     }, 2000); // Poll every 2 seconds
     
+    // Store the interval ID, not the interval itself
     setProgressPolling(pollInterval);
     
     return () => {
