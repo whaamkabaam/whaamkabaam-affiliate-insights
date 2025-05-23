@@ -12,14 +12,19 @@ export function ConfigForm() {
   const [hasKey, setHasKey] = useState(false);
 
   useEffect(() => {
-    // Check if Stripe key is configured (just check if it exists, don't retrieve the actual value)
+    // Check if Stripe key is configured
     const checkStripeKey = async () => {
       try {
         const { data, error } = await supabase.functions.invoke("get-affiliate-data", {
           body: { checkKey: true }
         });
         
-        if (!error && data) {
+        if (error) {
+          console.error("Error checking Stripe key:", error);
+          return;
+        }
+        
+        if (data && data.hasKey) {
           setHasKey(true);
         }
       } catch (err) {
@@ -30,19 +35,31 @@ export function ConfigForm() {
     checkStripeKey();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // In a real app, we would need an edge function to securely save this
-    // This is just for demonstration purposes
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      // In a real app, you would call your backend API to securely save the key
+      // This is just a placeholder - we would need a separate edge function to save the key
+      const { error } = await supabase.functions.invoke("set-stripe-key", {
+        body: { key: stripeKey }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
       toast.success("API key saved successfully");
       setHasKey(true);
       // Clear the input for security
       setStripeKey("");
-    }, 1000);
+    } catch (err) {
+      console.error("Error saving API key:", err);
+      toast.error("Failed to save API key");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

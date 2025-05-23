@@ -7,3 +7,6 @@ verify_jwt = false
 
 [functions.get-affiliate-data]
 verify_jwt = true
+
+[functions.set-stripe-key]
+verify_jwt = true

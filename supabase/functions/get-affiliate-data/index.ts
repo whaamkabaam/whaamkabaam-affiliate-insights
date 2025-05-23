@@ -26,16 +26,57 @@ serve(async (req) => {
   }
 
   try {
-    const { affiliateCode, year, month } = await req.json();
-    
-    if (!affiliateCode || !year || !month) {
+    // Parse request body
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (e) {
+      console.error("Failed to parse JSON:", e);
       return new Response(
-        JSON.stringify({ error: "Missing affiliateCode, year, or month parameter" }),
+        JSON.stringify({ error: "Invalid JSON in request body" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    // Handle special case for checking if Stripe key is configured
+    if (requestData.checkKey === true) {
+      const hasKey = !!Deno.env.get("STRIPE_SECRET_KEY");
+      return new Response(
+        JSON.stringify({ hasKey }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // Extract and validate parameters
+    const { affiliateCode, year, month } = requestData;
+    
+    if (!affiliateCode) {
+      console.error("Missing affiliateCode parameter");
+      return new Response(
+        JSON.stringify({ error: "Missing affiliateCode parameter" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    if (!year || !month) {
+      console.error("Missing year or month parameter");
+      return new Response(
+        JSON.stringify({ error: "Missing year or month parameter" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    // Get Stripe API key from environment variables
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) {
+      console.error("STRIPE_SECRET_KEY environment variable not set");
+      return new Response(
+        JSON.stringify({ error: "Stripe API key not configured" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
+    }
+
+    const stripe = new Stripe(stripeKey, {
       apiVersion: "2023-10-16",
     });
 
@@ -76,6 +117,8 @@ serve(async (req) => {
     const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate(); // Get last day of month
     const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59);
+    
+    console.log(`Fetching data for ${affiliateCode} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // We'll use this to store our commission data
     const commissions = [];
@@ -149,15 +192,24 @@ serve(async (req) => {
         expand: ['data.discounts']
       });
       
+      console.log(`Found ${sessions.data.length} sessions in time range`);
+      
       // Process each session that has our promo code
       for (const session of sessions.data) {
         // Skip sessions that aren't paid
         if (session.payment_status !== 'paid') continue;
         
         // Check if this session used our promo code
-        const hasPromoCode = session.discounts?.some((discount: any) => 
-          discount.promotion_code === promoId
-        );
+        let hasPromoCode = false;
+        
+        // Handle both direct discount field and discounts array
+        if (session.discounts && session.discounts.length > 0) {
+          hasPromoCode = session.discounts.some((discount: any) => 
+            discount.promotion_code === promoId
+          );
+        } else if (session.discount && session.discount.promotion_code === promoId) {
+          hasPromoCode = true;
+        }
         
         if (!hasPromoCode) continue;
         
@@ -193,12 +245,15 @@ serve(async (req) => {
         });
       }
     } else {
+      console.error(`Invalid affiliate code: ${affiliateCode}`);
       return new Response(
         JSON.stringify({ error: "Invalid affiliate code" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
 
+    console.log(`Returning ${commissions.length} commissions for ${affiliateCode}`);
+    
     // Return compiled data
     return new Response(
       JSON.stringify({

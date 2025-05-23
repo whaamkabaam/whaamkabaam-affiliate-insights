@@ -55,10 +55,17 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    if (!user.affiliateCode) {
+      setError("User does not have an affiliate code");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
+      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}`);
+      
       // Call our Supabase Edge Function to get the real data from Stripe
       const { data, error } = await supabase.functions.invoke<{
         commissions: Commission[];
@@ -74,22 +81,40 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error("Error fetching commission data:", error);
         setError(`Failed to fetch commission data: ${error.message}`);
+        setCommissions([]);
+        setSummary({
+          totalRevenue: 0,
+          totalCommission: 0,
+          customerCount: 0,
+        });
         return;
       }
 
       if (!data) {
         setError("No data returned from API");
+        setCommissions([]);
+        setSummary({
+          totalRevenue: 0,
+          totalCommission: 0,
+          customerCount: 0,
+        });
         return;
       }
 
-      setCommissions(data.commissions);
-      setSummary(data.summary);
+      console.log(`Received ${data.commissions?.length || 0} commissions`);
+      
+      setCommissions(data.commissions || []);
+      setSummary(data.summary || {
+        totalRevenue: 0,
+        totalCommission: 0,
+        customerCount: 0,
+      });
       
       // Update monthly stats
       const key = `${year}-${month.toString().padStart(2, '0')}`;
       const newMonthlyStats = {
-        totalCommission: data.summary.totalCommission,
-        customerCount: data.summary.customerCount
+        totalCommission: data.summary?.totalCommission || 0,
+        customerCount: data.summary?.customerCount || 0
       };
       
       setMonthlyStats(prev => ({
@@ -100,6 +125,12 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.error("Exception during commission fetch:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch commission data");
+      setCommissions([]);
+      setSummary({
+        totalRevenue: 0,
+        totalCommission: 0,
+        customerCount: 0,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -112,8 +143,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return monthlyStats[key];
     }
     
-    await fetchCommissionData(year, month);
-    return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
+    try {
+      await fetchCommissionData(year, month);
+      return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
+    } catch (error) {
+      console.error(`Error in getMonthlyStats for ${year}-${month}:`, error);
+      return { totalCommission: 0, customerCount: 0 };
+    }
   };
 
   const value = {
