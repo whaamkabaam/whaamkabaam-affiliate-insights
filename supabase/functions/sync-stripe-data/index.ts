@@ -1,4 +1,5 @@
 
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0'
 import { Stripe } from 'https://esm.sh/stripe@14.22.0'
@@ -123,7 +124,7 @@ serve(async (req: Request) => {
           return null;
         }
         
-        // No need to make separate API calls - use the expanded data
+        // Use the expanded data directly instead of making separate API calls
         let productId = null;
         let productName = null;
         

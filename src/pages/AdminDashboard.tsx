@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
@@ -18,6 +19,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
@@ -26,6 +28,7 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [syncingStripe, setSyncingStripe] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncProgress, setSyncProgress] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -38,8 +41,8 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Fetch only last sync time after a short delay
-    // Remove the duplicate fetchAffiliateOverviews call - let the provider handle it
+    // Only fetch last sync time, remove the duplicate fetchAffiliateOverviews call
+    // that was causing the re-rendering loop
     const timer = setTimeout(fetchLastSyncTime, 500);
     
     return () => clearTimeout(timer);
@@ -88,6 +91,7 @@ export default function AdminDashboard() {
     if (syncingStripe) return;
     
     setSyncingStripe(true);
+    setSyncProgress(0);
     toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
     
     try {
@@ -109,12 +113,14 @@ export default function AdminDashboard() {
       }
       
       fetchLastSyncTime();
-      fetchAffiliateOverviews();
+      // Only refresh affiliate overviews after the sync is complete
+      await fetchAffiliateOverviews();
     } catch (error) {
       console.error("Error syncing Stripe data:", error);
       toast.error(`Failed to sync Stripe data: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSyncingStripe(false);
+      setSyncProgress(null);
     }
   };
 
@@ -199,6 +205,18 @@ export default function AdminDashboard() {
                     <p>No synchronization history available.</p>
                   )}
                 </div>
+
+                {syncingStripe && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Synchronizing data...</span>
+                      <span className="text-muted-foreground">
+                        {syncProgress !== null ? `${syncProgress.toFixed(0)}%` : "In progress"}
+                      </span>
+                    </div>
+                    <Progress value={syncProgress ?? 30} className="h-2" />
+                  </div>
+                )}
                 
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Button 
