@@ -41,166 +41,11 @@ interface PromoCodeSale {
   refreshed_at: string;
 }
 
-// Function to map promo code to affiliate code
-async function getAffiliateCodeByPromoCode(promoCode: string): Promise<{ code: string; rate: number } | null> {
-  // First check if the promo code directly matches an affiliate code
-  const { data: affiliates } = await supabase
-    .from('affiliates')
-    .select('affiliate_code, commission_rate')
-    .eq('affiliate_code', promoCode.toUpperCase());
-  
-  if (affiliates && affiliates.length > 0) {
-    return { 
-      code: affiliates[0].affiliate_code,
-      rate: affiliates[0].commission_rate 
-    };
-  }
-  
-  // If no direct match, you could implement custom mapping logic here
-  // For example, if promo code "SUMMER50_NIC" should map to affiliate "NIC"
-  
-  return null;
-}
-
-// Function to process a Stripe checkout session
-async function processCheckoutSession(session: any): Promise<PromoCodeSale | null> {
-  try {
-    // Only process paid sessions
-    if (session.payment_status !== 'paid') {
-      return null;
-    }
-    
-    // Get line items for this session
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
-    
-    if (!lineItems.data || lineItems.data.length === 0) {
-      console.log(`No line items found for session ${session.id}`);
-      return null;
-    }
-    
-    // Get product details if available
-    let productId = null;
-    let productName = null;
-    
-    if (lineItems.data[0]?.price?.product) {
-      const productIdOrObj = lineItems.data[0].price.product;
-      productId = typeof productIdOrObj === 'string' ? productIdOrObj : productIdOrObj.id;
-      
-      if (typeof productIdOrObj !== 'string') {
-        productName = productIdOrObj.name;
-      } else {
-        // If we only have the product ID, fetch the product details
-        try {
-          const product = await stripe.products.retrieve(productId);
-          productName = product.name;
-        } catch (error) {
-          console.error(`Error fetching product details: ${error}`);
-        }
-      }
-    }
-    
-    // Get promo code information
-    let promoCodeId = null;
-    let promoCodeName = null;
-    let affiliateCode = null;
-    let affiliateRate = 0;
-    
-    // Check if there are any discounts and process them
-    if (session.total_details?.breakdown?.discounts && 
-        session.total_details.breakdown.discounts.length > 0) {
-      
-      // Get the promotion code ID
-      const discount = session.total_details.breakdown.discounts[0];
-      if (discount.discount?.promotion_code) {
-        promoCodeId = discount.discount.promotion_code;
-        
-        // Get the promo code details
-        try {
-          const promoCode = await stripe.promotionCodes.retrieve(promoCodeId);
-          promoCodeName = promoCode.code;
-          
-          // Map the promo code to an affiliate
-          if (promoCodeName) {
-            const affiliateInfo = await getAffiliateCodeByPromoCode(promoCodeName);
-            if (affiliateInfo) {
-              affiliateCode = affiliateInfo.code;
-              affiliateRate = affiliateInfo.rate;
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching promo code details: ${error}`);
-        }
-      }
-    }
-    
-    // Calculate affiliate commission (if applicable)
-    let affiliateCommission = null;
-    if (affiliateCode && affiliateRate > 0) {
-      // Divide by 100 because Stripe amount is in cents
-      affiliateCommission = (session.amount_total / 100) * affiliateRate;
-    }
-    
-    // Create the record
-    const saleRecord: PromoCodeSale = {
-      session_id: session.id,
-      payment_intent_id: session.payment_intent || null,
-      customer_email: session.customer_details?.email || null,
-      amount_paid: session.amount_total / 100, // Convert from cents
-      product_id: productId,
-      product_name: productName,
-      promo_code_id: promoCodeId,
-      promo_code_name: affiliateCode, // Use the mapped affiliate code
-      affiliate_commission: affiliateCommission,
-      created_at: new Date(session.created * 1000).toISOString(),
-      refreshed_at: new Date().toISOString()
-    };
-    
-    return saleRecord;
-  } catch (error) {
-    console.error(`Error processing session ${session.id}: ${error}`);
-    return null;
-  }
-}
-
-// Function to get the last refresh timestamp
-async function getLastRefreshTimestamp(): Promise<string> {
-  const { data, error } = await supabase
-    .from('system_settings')
-    .select('value')
-    .eq('key', 'last_stripe_refresh')
-    .single();
-  
-  if (error || !data) {
-    console.error('Error fetching last refresh timestamp:', error);
-    // Default to 30 days ago if no timestamp found
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return thirtyDaysAgo.toISOString();
-  }
-  
-  return (data.value as SystemSettings).timestamp;
-}
-
-// Function to update the last refresh timestamp
-async function updateLastRefreshTimestamp(): Promise<void> {
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('system_settings')
-    .update({ 
-      value: { timestamp: now },
-      updated_at: now
-    })
-    .eq('key', 'last_stripe_refresh');
-  
-  if (error) {
-    console.error('Error updating last refresh timestamp:', error);
-  }
-}
-
 // Main handler
 serve(async (req: Request) => {
-  // Handle CORS preflight request
+  // Handle CORS preflight requests - THIS MUST BE THE FIRST THING WE DO
   if (req.method === 'OPTIONS') {
+    console.log("Handling OPTIONS preflight request");
     return new Response(null, { 
       status: 204,
       headers: corsHeaders 
@@ -235,6 +80,162 @@ serve(async (req: Request) => {
     } catch (error) {
       console.log("Failed to parse request body, using default options");
       // If body parsing fails, default options are fine
+    }
+    
+    // Function to map promo code to affiliate code
+    async function getAffiliateCodeByPromoCode(promoCode: string): Promise<{ code: string; rate: number } | null> {
+      // First check if the promo code directly matches an affiliate code
+      const { data: affiliates } = await supabase
+        .from('affiliates')
+        .select('affiliate_code, commission_rate')
+        .eq('affiliate_code', promoCode.toUpperCase());
+      
+      if (affiliates && affiliates.length > 0) {
+        return { 
+          code: affiliates[0].affiliate_code,
+          rate: affiliates[0].commission_rate 
+        };
+      }
+      
+      // If no direct match, you could implement custom mapping logic here
+      // For example, if promo code "SUMMER50_NIC" should map to affiliate "NIC"
+      
+      return null;
+    }
+
+    // Function to process a Stripe checkout session
+    async function processCheckoutSession(session: any): Promise<PromoCodeSale | null> {
+      try {
+        // Only process paid sessions
+        if (session.payment_status !== 'paid') {
+          return null;
+        }
+        
+        // Get line items for this session
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+        
+        if (!lineItems.data || lineItems.data.length === 0) {
+          console.log(`No line items found for session ${session.id}`);
+          return null;
+        }
+        
+        // Get product details if available
+        let productId = null;
+        let productName = null;
+        
+        if (lineItems.data[0]?.price?.product) {
+          const productIdOrObj = lineItems.data[0].price.product;
+          productId = typeof productIdOrObj === 'string' ? productIdOrObj : productIdOrObj.id;
+          
+          if (typeof productIdOrObj !== 'string') {
+            productName = productIdOrObj.name;
+          } else {
+            // If we only have the product ID, fetch the product details
+            try {
+              const product = await stripe.products.retrieve(productId);
+              productName = product.name;
+            } catch (error) {
+              console.error(`Error fetching product details: ${error}`);
+            }
+          }
+        }
+        
+        // Get promo code information
+        let promoCodeId = null;
+        let promoCodeName = null;
+        let affiliateCode = null;
+        let affiliateRate = 0;
+        
+        // Check if there are any discounts and process them
+        if (session.total_details?.breakdown?.discounts && 
+            session.total_details.breakdown.discounts.length > 0) {
+          
+          // Get the promotion code ID
+          const discount = session.total_details.breakdown.discounts[0];
+          if (discount.discount?.promotion_code) {
+            promoCodeId = discount.discount.promotion_code;
+            
+            // Get the promo code details
+            try {
+              const promoCode = await stripe.promotionCodes.retrieve(promoCodeId);
+              promoCodeName = promoCode.code;
+              
+              // Map the promo code to an affiliate
+              if (promoCodeName) {
+                const affiliateInfo = await getAffiliateCodeByPromoCode(promoCodeName);
+                if (affiliateInfo) {
+                  affiliateCode = affiliateInfo.code;
+                  affiliateRate = affiliateInfo.rate;
+                }
+              }
+            } catch (error) {
+              console.error(`Error fetching promo code details: ${error}`);
+            }
+          }
+        }
+        
+        // Calculate affiliate commission (if applicable)
+        let affiliateCommission = null;
+        if (affiliateCode && affiliateRate > 0) {
+          // Divide by 100 because Stripe amount is in cents
+          affiliateCommission = (session.amount_total / 100) * affiliateRate;
+        }
+        
+        // Create the record
+        const saleRecord: PromoCodeSale = {
+          session_id: session.id,
+          payment_intent_id: session.payment_intent || null,
+          customer_email: session.customer_details?.email || null,
+          amount_paid: session.amount_total / 100, // Convert from cents
+          product_id: productId,
+          product_name: productName,
+          promo_code_id: promoCodeId,
+          promo_code_name: affiliateCode, // Use the mapped affiliate code
+          affiliate_commission: affiliateCommission,
+          created_at: new Date(session.created * 1000).toISOString(),
+          refreshed_at: new Date().toISOString()
+        };
+        
+        return saleRecord;
+      } catch (error) {
+        console.error(`Error processing session ${session.id}: ${error}`);
+        return null;
+      }
+    }
+    
+    // Function to get the last refresh timestamp
+    async function getLastRefreshTimestamp(): Promise<string> {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'last_stripe_refresh')
+        .single();
+      
+      if (error || !data) {
+        console.error('Error fetching last refresh timestamp:', error);
+        // Default to 30 days ago if no timestamp found
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return thirtyDaysAgo.toISOString();
+      }
+      
+      return (data.value as SystemSettings).timestamp;
+    }
+    
+    // Function to update the last refresh timestamp
+    async function updateLastRefreshTimestamp(): Promise<void> {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('system_settings')
+        .update({ 
+          value: { timestamp: now },
+          updated_at: now
+        })
+        .eq('key', 'last_stripe_refresh');
+      
+      if (error) {
+        console.error('Error updating last refresh timestamp:', error);
+      }
     }
     
     // Determine the created_at filter based on full_refresh option or last timestamp

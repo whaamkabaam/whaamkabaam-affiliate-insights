@@ -91,24 +91,19 @@ export default function AdminDashboard() {
     if (syncingStripe) return;
     
     setSyncingStripe(true);
+    toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
+    
     try {
-      // Get the access token
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      
-      if (!accessToken) {
-        throw new Error("No access token available");
-      }
-      
-      toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
-      
-      // Call the edge function through the Supabase client instead of direct fetch
+      // Call the edge function through the Supabase client
       const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
         method: "POST",
         body: { fullRefresh }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error from edge function:", error);
+        throw error;
+      }
       
       if (data) {
         toast.success(`Stripe data synced: ${data.stats.saved} records processed, ${data.stats.skipped} skipped`);
