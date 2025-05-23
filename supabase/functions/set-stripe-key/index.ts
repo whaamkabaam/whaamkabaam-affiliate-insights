@@ -40,6 +40,8 @@ serve(async (req) => {
     });
     
     if (roleError || roleData !== 'admin') {
+      console.log("Role check error:", roleError);
+      console.log("Role data:", roleData);
       return new Response(
         JSON.stringify({ error: "Unauthorized - Admin access required" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 403 }
@@ -56,9 +58,20 @@ serve(async (req) => {
       );
     }
     
-    // In a real implementation, we would store this key in a secure secret manager
-    // For this demo, we'll set it in the current function's environment
-    // Note: This is just for demo purposes - in production, use a secure secret manager
+    // Store the key in Supabase secrets
+    const { error: secretError } = await supabaseClient
+      .rpc('admin_set_secret', {
+        secret_name: 'stripe_secret_key',
+        secret_value: key
+      });
+      
+    if (secretError) {
+      console.error("Error storing secret:", secretError);
+      return new Response(
+        JSON.stringify({ error: "Failed to store API key: " + secretError.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
+    }
     
     // Return success
     return new Response(
