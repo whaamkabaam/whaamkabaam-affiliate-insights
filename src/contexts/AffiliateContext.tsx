@@ -41,7 +41,7 @@ interface AffiliateContextType {
   error: string | null;
   summary: CommissionSummary;
   getMonthlyStats: (year: number, month: number) => Promise<MonthlyStats>;
-  fetchCommissionData: (year: number, month: number) => Promise<void>;
+  fetchCommissionData: (year: number, month: number, forceRefresh?: boolean) => Promise<void>;
   monthlyStats: Record<string, MonthlyStats>;
   // Admin overview
   affiliateOverviews: AffiliateOverview[];
@@ -135,14 +135,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAuthenticated, isAdmin, lastFetchTimestamp]);
 
-  const fetchCommissionData = useCallback(async (year: number, month: number) => {
+  const fetchCommissionData = useCallback(async (year: number, month: number, forceRefresh = false) => {
     if (!isAuthenticated || !user) {
       setError("User not authenticated");
       return;
     }
 
     // If the user is admin, they should call fetchAffiliateOverviews() instead
-    // but we don't need to reset the state here
     if (isAdmin) {
       await fetchAffiliateOverviews();
       return;
@@ -154,17 +153,17 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Generate a unique key for this fetch operation to prevent duplicate fetches
+    // Generate a unique key for this fetch operation
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
     
-    // Check if we've already fetched this month's data
-    if (fetchedMonthYearCombos.has(fetchKey)) {
+    // Check if we've already fetched this month's data and not forcing refresh
+    if (!forceRefresh && fetchedMonthYearCombos.has(fetchKey)) {
       console.log(`Already fetched data for ${fetchKey}, using cached data`);
       return;
     }
     
     // Check if we're already fetching the same data
-    if (currentFetchKey === fetchKey && isLoading) {
+    if (currentFetchKey === fetchKey && isLoading && !forceRefresh) {
       console.log(`Already fetching data for ${fetchKey}`);
       return;
     }
@@ -174,15 +173,34 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}`);
+      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${forceRefresh}`);
       
-      // For regular affiliates, call our Supabase Edge Function to get their data
+      // If forcing refresh, sync data from Stripe first
+      if (forceRefresh) {
+        console.log("Force refresh requested, syncing from Stripe...");
+        
+        const { error: syncError } = await supabase.functions.invoke("sync-stripe-data", {
+          body: {
+            year,
+            month,
+            forceRefresh: true
+          }
+        });
+
+        if (syncError) {
+          console.error("Error syncing Stripe data:", syncError);
+          // Continue anyway, maybe we have some cached data
+        } else {
+          console.log("Stripe data sync completed");
+        }
+      }
+      
+      // Now fetch the data from our database
       const { data, error } = await supabase.functions.invoke<{
         commissions: Commission[];
         summary: CommissionSummary;
       }>("get-affiliate-data", {
         body: {
-          // Ensure the affiliate code is properly passed as-is (whether uppercase or lowercase)
           affiliateCode: user.affiliateCode,
           year,
           month

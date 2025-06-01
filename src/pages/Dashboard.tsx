@@ -34,7 +34,7 @@ export default function Dashboard() {
     if (!dataFetchInitiated && !dataRefreshing) {
       setDataFetchInitiated(true);
       setDataRefreshing(true);
-      fetchCommissionData(selectedYear, selectedMonth)
+      fetchCommissionData(selectedYear, selectedMonth, false)
         .finally(() => {
           setDataRefreshing(false);
         });
@@ -65,9 +65,20 @@ export default function Dashboard() {
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     if (!dataRefreshing) {
-      setDataFetchInitiated(false);
+      setDataRefreshing(true);
+      console.log("Force refreshing data from Stripe...");
+      
+      try {
+        await fetchCommissionData(selectedYear, selectedMonth, true); // Force refresh
+        toast.success("Data refreshed from Stripe");
+      } catch (error) {
+        console.error("Refresh error:", error);
+        toast.error("Failed to refresh data");
+      } finally {
+        setDataRefreshing(false);
+      }
     }
   };
 
