@@ -129,12 +129,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    console.log("Setting up auth state listener");
+    console.log("Setting up auth state listener with session persistence");
     
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    // Configure Supabase client for session persistence
+    supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log("Auth state changed, event:", event);
+        console.log("Auth state changed, event:", event, "session exists:", !!newSession);
         setSession(newSession);
         
         if (newSession?.user) {
@@ -151,12 +151,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(null);
           setIsAdmin(false);
         }
+        
+        // Set loading to false after processing auth state
+        setIsLoading(false);
       }
     );
 
-    // Check for existing session
+    // Check for existing session immediately
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      console.log("Checking for existing session");
+      console.log("Checking for existing session", !!existingSession);
       setSession(existingSession);
       
       if (existingSession?.user) {
@@ -174,7 +177,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // No cleanup needed for onAuthStateChange as it handles its own subscription
   }, []);
 
   const login = async (email: string, password: string) => {

@@ -67,95 +67,50 @@ serve(async (req) => {
     
     console.log(`Fetching data for ${affiliateCode} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
+    // Query the promo_code_sales table for affiliate commission data
+    const { data, error } = await supabaseClient
+      .from('promo_code_sales')
+      .select('*')
+      .eq('promo_code_name', affiliateCode)
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString());
+    
+    if (error) {
+      console.error("Error fetching sales data:", error);
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
+    }
+    
     // Track customer emails for counting unique customers
     const customerEmails = new Set();
     let totalRevenue = 0;
     let totalCommission = 0;
     const commissions = [];
 
-    if (affiliateCode === "ayoub") {
-      // Special case for ayoub: all $149 sales without 'nic' or 'maru' code
-      // This case can be handled with a specific query on promo_code_sales
-      const { data, error } = await supabaseClient
-        .from('promo_code_sales')
-        .select('*')
-        .is('promo_code_name', null) // No affiliate code
-        .eq('product_id', 'prod_RINO6yE0y4O9gX') // Only enterprise membership
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+    // Process sales data
+    if (data && data.length > 0) {
+      for (const sale of data) {
+        if (sale.customer_email) {
+          customerEmails.add(sale.customer_email);
+        }
         
-      if (error) {
-        console.error("Error fetching sales data:", error);
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-        );
-      }
-      
-      // Process sales data
-      if (data && data.length > 0) {
-        for (const sale of data) {
-          // Use fixed commission for ayoub as per original logic
-          const commission = 20.0;
-          
-          if (sale.customer_email) {
-            customerEmails.add(sale.customer_email);
-          }
-          
-          totalRevenue += Number(sale.amount_paid);
-          totalCommission += commission;
-          
-          commissions.push({
-            sessionId: sale.session_id,
-            paymentIntent: sale.payment_intent_id,
-            customerEmail: sale.customer_email || "unknown@example.com",
-            amount: Number(sale.amount_paid),
-            commission,
-            date: sale.created_at,
-            productId: sale.product_id
-          });
-        }
-      }
-    } else {
-      // For all other affiliates, query based on promo_code_name
-      const { data, error } = await supabaseClient
-        .from('promo_code_sales')
-        .select('*')
-        .eq('promo_code_name', affiliateCode)
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
-      
-      if (error) {
-        console.error("Error fetching sales data:", error);
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-        );
-      }
-      
-      // Process sales data
-      if (data && data.length > 0) {
-        for (const sale of data) {
-          if (sale.customer_email) {
-            customerEmails.add(sale.customer_email);
-          }
-          
-          const amount = Number(sale.amount_paid);
-          const commission = Number(sale.affiliate_commission || 0);
-          
-          totalRevenue += amount;
-          totalCommission += commission;
-          
-          commissions.push({
-            sessionId: sale.session_id,
-            paymentIntent: sale.payment_intent_id,
-            customerEmail: sale.customer_email || "unknown@example.com",
-            amount,
-            commission,
-            date: sale.created_at,
-            productId: sale.product_id
-          });
-        }
+        const amount = Number(sale.amount_paid || 0);
+        const commission = Number(sale.affiliate_commission || 0);
+        
+        totalRevenue += amount;
+        totalCommission += commission;
+        
+        commissions.push({
+          sessionId: sale.session_id,
+          paymentIntent: sale.payment_intent_id,
+          customerEmail: sale.customer_email || "unknown@example.com",
+          amount,
+          commission,
+          date: sale.created_at,
+          productId: sale.product_id
+        });
       }
     }
 
