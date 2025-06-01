@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -53,33 +52,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Perform all data fetching operations concurrently with timeout
       console.log("AuthContext: Making concurrent RPC calls...");
       
-      // Convert Supabase builders to promises by calling them
-      const rolePromise = withTimeout(
-        supabase.rpc('get_user_role', { user_id: userId }),
-        10000,
-        'get_user_role'
-      );
-      
-      const affiliatePromise = withTimeout(
-        supabase.rpc('get_affiliate_data', { p_user_id: userId }),
-        10000,
-        'get_affiliate_data'
-      );
-      
-      const profilePromise = withTimeout(
-        supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle(),
-        10000,
-        'profiles_query'
-      );
-
-      console.log("AuthContext: Waiting for all promises to resolve...");
-      
       // Track individual promise completion
       let roleResult, affiliateResult, profileResult;
       
       try {
         console.log("AuthContext: Starting role promise...");
-        roleResult = await rolePromise;
+        roleResult = await withTimeout(
+          supabase.rpc('get_user_role', { user_id: userId }).then(result => result),
+          10000,
+          'get_user_role'
+        );
         console.log("AuthContext: Role promise completed:", roleResult);
       } catch (error) {
         console.error("AuthContext: Role promise failed:", error);
@@ -88,7 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         console.log("AuthContext: Starting affiliate promise...");
-        affiliateResult = await affiliatePromise;
+        affiliateResult = await withTimeout(
+          supabase.rpc('get_affiliate_data', { p_user_id: userId }).then(result => result),
+          10000,
+          'get_affiliate_data'
+        );
         console.log("AuthContext: Affiliate promise completed:", affiliateResult);
       } catch (error) {
         console.error("AuthContext: Affiliate promise failed:", error);
@@ -97,7 +83,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         console.log("AuthContext: Starting profile promise...");
-        profileResult = await profilePromise;
+        profileResult = await withTimeout(
+          supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle().then(result => result),
+          10000,
+          'profiles_query'
+        );
         console.log("AuthContext: Profile promise completed:", profileResult);
       } catch (error) {
         console.error("AuthContext: Profile promise failed:", error);
