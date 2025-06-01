@@ -10,7 +10,6 @@ export interface UserWithRole extends User {
   name?: string;
 }
 
-// Updated the return type of login function to match what Supabase actually returns
 interface AuthContextType {
   user: UserWithRole | null;
   session: Session | null;
@@ -35,132 +34,91 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Helper function to create a promise with timeout (reduced to 3 seconds)
-  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error(`${name} timed out after ${timeoutMs}ms`)), timeoutMs)
-      )
-    ]);
-  };
-
-  // Enhanced email-based fallback mapping
-  const getAffiliateCodeFromEmail = (email: string): string | undefined => {
+  // Enhanced email-based mapping for known users
+  const getKnownUserData = (email: string): { affiliateCode: string; role: AppRole; name: string } | null => {
     const emailLower = email.toLowerCase();
-    const emailToCodeMap: Record<string, string> = {
-      'nic@whaamkabaam.com': 'nic',
-      'maru@whaamkabaam.com': 'maru',
-      'ayoub@whaamkabaam.com': 'ayoub'
+    const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
+      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'admin', name: 'Nic' },
+      'maru@whaamkabaam.com': { affiliateCode: 'maru', role: 'affiliate', name: 'Maru' },
+      'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' }
     };
-    return emailToCodeMap[emailLower];
+    return knownUsers[emailLower] || null;
   };
 
-  // Optimized fetchUserData function with improved error handling and fallbacks
+  // Simplified and faster user data fetching
   const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
       console.log("AuthContext: Starting fetchUserData for userId:", userId);
-
-      // Reduce timeout to 3 seconds since we've optimized the database
-      const timeoutMs = 3000;
       
-      console.log("AuthContext: Making concurrent RPC calls with reduced timeout...");
+      // Check if this is a known user first
+      const knownUserData = currentUser.email ? getKnownUserData(currentUser.email) : null;
       
-      // First, try to get affiliate code from user metadata or email fallback
-      let primaryAffiliateCode = currentUser.user_metadata?.affiliate_code;
-      if (!primaryAffiliateCode && currentUser.email) {
-        primaryAffiliateCode = getAffiliateCodeFromEmail(currentUser.email);
-        console.log("AuthContext: Using email-based fallback for affiliate code:", primaryAffiliateCode);
+      if (knownUserData) {
+        console.log("AuthContext: Using known user data for:", currentUser.email);
+        const finalUser: UserWithRole = {
+          ...currentUser,
+          role: knownUserData.role,
+          affiliateCode: knownUserData.affiliateCode,
+          name: knownUserData.name
+        };
+        console.log("AuthContext: Final user object prepared (known user):", finalUser);
+        return finalUser;
       }
 
-      // Perform data fetching operations concurrently with timeout
-      const [roleResult, affiliateResult, profileResult] = await Promise.allSettled([
-        withTimeout(
-          Promise.resolve(supabase.rpc('get_user_role', { user_id: userId })),
-          timeoutMs,
-          'get_user_role'
-        ),
-        withTimeout(
-          Promise.resolve(supabase.rpc('get_affiliate_data', { p_user_id: userId })),
-          timeoutMs,
-          'get_affiliate_data'
-        ),
-        withTimeout(
-          Promise.resolve(supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()),
-          timeoutMs,
-          'profiles_query'
-        )
-      ]);
+      // For unknown users, try a simplified direct query approach with very short timeout
+      console.log("AuthContext: Unknown user, attempting simplified queries...");
+      
+      try {
+        // Try a simple direct query to affiliates table with 1 second timeout
+        const affiliateQuery = supabase
+          .from('affiliates')
+          .select('affiliate_code, commission_rate')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      console.log("AuthContext: All promises resolved. Processing results...");
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Query timeout')), 1000)
+        );
 
-      // Process results with improved error handling
-      const roleData = roleResult.status === 'fulfilled' ? roleResult.value.data : null;
-      const roleError = roleResult.status === 'rejected' ? roleResult.reason : (roleResult.status === 'fulfilled' ? roleResult.value.error : null);
-
-      const affiliateRpcData = affiliateResult.status === 'fulfilled' ? affiliateResult.value.data : null;
-      const affiliateError = affiliateResult.status === 'rejected' ? affiliateResult.reason : (affiliateResult.status === 'fulfilled' ? affiliateResult.value.error : null);
-
-      const profileData = profileResult.status === 'fulfilled' ? profileResult.value.data : null;
-      const profileError = profileResult.status === 'rejected' ? profileResult.reason : (profileResult.status === 'fulfilled' ? profileResult.value.error : null);
-
-      // Log any errors encountered during fetching
-      if (roleError) console.error("AuthContext: Error checking admin role:", roleError.message || roleError);
-      if (affiliateError) console.error("AuthContext: Error fetching affiliate data from RPC:", affiliateError.message || affiliateError);
-      if (profileError) console.error("AuthContext: Error fetching profile data:", profileError.message || profileError);
-
-      console.log("AuthContext: User role data from RPC:", roleData);
-      console.log("AuthContext: Affiliate data from RPC (get_affiliate_data):", affiliateRpcData);
-      console.log("AuthContext: Profile data from DB:", profileData);
-
-      // Determine affiliate code with improved fallback logic
-      let determinedAffiliateCode = primaryAffiliateCode; // Start with metadata or email fallback
-      console.log("AuthContext: Primary affiliate code (metadata/email):", determinedAffiliateCode);
-
-      // Try to get affiliate_code from the RPC call's result if we don't have one yet
-      if (!determinedAffiliateCode && affiliateRpcData && typeof affiliateRpcData === 'object' && 'affiliate_code' in affiliateRpcData) {
-        const rpcAffiliateCode = (affiliateRpcData as { affiliate_code?: string }).affiliate_code;
-        if (rpcAffiliateCode) {
-          determinedAffiliateCode = rpcAffiliateCode;
-          console.log("AuthContext: Affiliate code from RPC (get_affiliate_data):", determinedAffiliateCode);
+        const { data: affiliateData } = await Promise.race([affiliateQuery, timeoutPromise]) as any;
+        
+        if (affiliateData) {
+          console.log("AuthContext: Found affiliate data via direct query:", affiliateData);
+          const finalUser: UserWithRole = {
+            ...currentUser,
+            role: affiliateData.commission_rate >= 0.2 ? 'admin' : 'affiliate',
+            affiliateCode: affiliateData.affiliate_code,
+            name: currentUser.email?.split('@')[0] || "User"
+          };
+          return finalUser;
         }
+      } catch (queryError) {
+        console.warn("AuthContext: Direct query failed:", queryError);
       }
 
-      // Final fallback - use email-based assignment if we still don't have a code and there were errors
-      if (!determinedAffiliateCode && currentUser.email && (roleError || affiliateError)) {
-        determinedAffiliateCode = getAffiliateCodeFromEmail(currentUser.email);
-        if (determinedAffiliateCode) {
-          console.log("AuthContext: Final fallback - assigned affiliate code based on email:", determinedAffiliateCode);
-        }
-      }
-      
-      console.log("AuthContext: Building final user object...");
-      const finalUser: UserWithRole = {
+      // Final fallback for unknown users
+      console.log("AuthContext: Using complete fallback for unknown user");
+      const fallbackUser: UserWithRole = {
         ...currentUser,
-        role: roleData === 'admin' ? 'admin' : 'affiliate',
-        affiliateCode: determinedAffiliateCode,
-        name: profileData?.full_name || profileData?.display_name || currentUser.email?.split('@')[0] || "User"
+        role: 'affiliate',
+        affiliateCode: undefined, // No affiliate code for unknown users
+        name: currentUser.email?.split('@')[0] || "User"
       };
       
-      console.log("AuthContext: Final user object prepared:", finalUser);
-      return finalUser;
+      return fallbackUser;
 
     } catch (err: any) {
-      console.error("AuthContext: Critical error in fetchUserData for user ID " + userId + ":", err.message);
-      console.error("AuthContext: Full error object:", err);
+      console.error("AuthContext: Critical error in fetchUserData:", err);
       
-      // Enhanced fallback user object with more reliable affiliate code assignment
-      const fallbackAffiliateCode = currentUser.user_metadata?.affiliate_code || 
-                                  (currentUser.email ? getAffiliateCodeFromEmail(currentUser.email) : undefined);
-      
-      const fallbackUser = { 
-          ...currentUser, 
-          role: 'affiliate' as AppRole, // Default role
-          affiliateCode: fallbackAffiliateCode, 
-          name: currentUser.email?.split('@')[0] || "User"
+      // Emergency fallback
+      const emergencyUser: UserWithRole = {
+        ...currentUser,
+        role: 'affiliate',
+        affiliateCode: currentUser.email ? getKnownUserData(currentUser.email)?.affiliateCode : undefined,
+        name: currentUser.email?.split('@')[0] || "User"
       };
-      console.log("AuthContext: Returning enhanced fallback user object:", fallbackUser);
-      return fallbackUser;
+      
+      return emergencyUser;
     }
   };
 
@@ -183,17 +141,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsAdmin(detailedUser.role === 'admin');
           } catch (error) {
             console.error("AuthContext: Error in fetchUserData:", error);
-            // Set a more robust minimal user to prevent infinite loading
-            const fallbackAffiliateCode = newSession.user.user_metadata?.affiliate_code || 
-                                        (newSession.user.email ? getAffiliateCodeFromEmail(newSession.user.email) : undefined);
+            // Set a robust minimal user
+            const knownUserData = newSession.user.email ? getKnownUserData(newSession.user.email) : null;
             
             setUser({
               ...newSession.user,
-              role: 'affiliate',
-              affiliateCode: fallbackAffiliateCode,
-              name: newSession.user.email?.split('@')[0] || "User"
+              role: knownUserData?.role || 'affiliate',
+              affiliateCode: knownUserData?.affiliateCode,
+              name: knownUserData?.name || newSession.user.email?.split('@')[0] || "User"
             });
-            setIsAdmin(false);
+            setIsAdmin(knownUserData?.role === 'admin' || false);
           }
         } else {
           console.log("AuthContext: No user in session. Clearing user state.");
