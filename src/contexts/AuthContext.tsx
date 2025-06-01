@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -38,17 +37,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Replace the existing fetchUserData function with this one:
   const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
-      console.log("AuthContext: Fetching additional user data for:", userId);
+      console.log("AuthContext: Starting fetchUserData for userId:", userId);
 
       // Perform all data fetching operations concurrently
+      console.log("AuthContext: Making concurrent RPC calls...");
+      
+      const rolePromise = supabase.rpc('get_user_role', { user_id: userId });
+      const affiliatePromise = supabase.rpc('get_affiliate_data', { p_user_id: userId });
+      const profilePromise = supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle();
+
+      console.log("AuthContext: Waiting for all promises to resolve...");
       const [roleResult, affiliateResult, profileResult] = await Promise.all([
-        supabase.rpc('get_user_role', { user_id: userId }),
-        supabase.rpc('get_affiliate_data', { user_id: userId }), // This RPC returns affiliate_code and commission_rate
-        supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()
+        rolePromise,
+        affiliatePromise,
+        profilePromise
       ]);
 
+      console.log("AuthContext: All promises resolved. Processing results...");
+
       const { data: roleData, error: roleError } = roleResult;
-      // Expect affiliateResult.data to be an object like { affiliate_code: 'xxx', commission_rate: 0.1 } or null
       const { data: affiliateRpcData, error: affiliateError } = affiliateResult;
       const { data: profileData, error: profileError } = profileResult;
 
@@ -62,6 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("AuthContext: Profile data from DB:", profileData);
 
       let determinedAffiliateCode: string | undefined = currentUser.user_metadata?.affiliate_code;
+      console.log("AuthContext: Initial affiliate code from user_metadata:", determinedAffiliateCode);
 
       // Try to get affiliate_code from the RPC call's result
       if (!determinedAffiliateCode && affiliateRpcData && typeof affiliateRpcData === 'object' && 'affiliate_code' in affiliateRpcData) {
@@ -75,6 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Fallback logic if no affiliate code is found yet (important for Maru as per logs)
       if (!determinedAffiliateCode && currentUser.email) {
         const emailLower = currentUser.email.toLowerCase();
+        console.log("AuthContext: Checking email-based fallbacks for:", emailLower);
         if (emailLower === 'nic@whaamkabaam.com') {
           determinedAffiliateCode = 'nic';
           console.log("AuthContext: Assigned FALLBACK affiliate code 'nic' based on email");
@@ -89,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // }
       }
       
+      console.log("AuthContext: Building final user object...");
       const finalUser: UserWithRole = {
         ...currentUser,
         role: roleData === 'admin' ? 'admin' : 'affiliate',
@@ -101,13 +111,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (err: any) {
       console.error("AuthContext: Critical error in fetchUserData for user ID " + userId + ":", err.message);
+      console.error("AuthContext: Full error object:", err);
       // Fallback to a minimal user object in case of unexpected errors
-      return { 
+      const fallbackUser = { 
           ...currentUser, 
-          role: 'affiliate', // Default role
+          role: 'affiliate' as AppRole, // Default role
           affiliateCode: currentUser.user_metadata?.affiliate_code, 
           name: currentUser.email?.split('@')[0] || "User"
       };
+      console.log("AuthContext: Returning fallback user object:", fallbackUser);
+      return fallbackUser;
     }
   };
 
@@ -123,9 +136,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (newSession?.user) {
           console.log("AuthContext: User found in new/changed session:", newSession.user.email);
-          const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
-          setUser(detailedUser);
-          setIsAdmin(detailedUser.role === 'admin'); // Set isAdmin based on fetched data
+          try {
+            const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
+            console.log("AuthContext: fetchUserData completed successfully:", detailedUser);
+            setUser(detailedUser);
+            setIsAdmin(detailedUser.role === 'admin'); // Set isAdmin based on fetched data
+          } catch (error) {
+            console.error("AuthContext: Error in fetchUserData:", error);
+            // Set a minimal user to prevent infinite loading
+            setUser({
+              ...newSession.user,
+              role: 'affiliate',
+              affiliateCode: newSession.user.user_metadata?.affiliate_code,
+              name: newSession.user.email?.split('@')[0] || "User"
+            });
+            setIsAdmin(false);
+          }
         } else {
           console.log("AuthContext: No user in new/changed session. Clearing user state.");
           setUser(null);
@@ -145,9 +171,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               console.log("AuthContext: User found in existing session:", existingSession.user.email);
                // Only set user if not already set by onAuthStateChange or if different user
               if (!user || user.id !== existingSession.user.id) {
-                  const detailedUser = await fetchUserData(existingSession.user.id, existingSession.user);
-                  setUser(detailedUser);
-                  setIsAdmin(detailedUser.role === 'admin');
+                  try {
+                    const detailedUser = await fetchUserData(existingSession.user.id, existingSession.user);
+                    console.log("AuthContext: Initial session fetchUserData completed:", detailedUser);
+                    setUser(detailedUser);
+                    setIsAdmin(detailedUser.role === 'admin');
+                  } catch (error) {
+                    console.error("AuthContext: Error in initial fetchUserData:", error);
+                    // Set a minimal user to prevent infinite loading
+                    setUser({
+                      ...existingSession.user,
+                      role: 'affiliate',
+                      affiliateCode: existingSession.user.user_metadata?.affiliate_code,
+                      name: existingSession.user.email?.split('@')[0] || "User"
+                    });
+                    setIsAdmin(false);
+                  }
               }
           } else { // existingSession but no user object
               setUser(null);
