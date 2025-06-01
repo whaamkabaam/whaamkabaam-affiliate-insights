@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,8 +15,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
-  const { user, isAdmin } = useAuth();
-  const { fetchCommissionData, summary, isLoading, error } = useAffiliate();
+  const { user, isAdmin, isLoading: authIsLoading } = useAuth();
+  const { fetchCommissionData, summary, isLoading: affiliateIsLoading, error } = useAffiliate();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [dataRefreshing, setDataRefreshing] = useState(false);
@@ -23,23 +24,44 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // If the user is an admin, redirect them to the admin dashboard
+    // Wait for authentication to complete
+    if (authIsLoading) {
+      return;
+    }
+
     if (isAdmin) {
       navigate("/admin");
       return;
     }
 
-    // Only fetch data if we haven't already initiated a fetch
-    // and we're not already loading or refreshing
-    if (!dataFetchInitiated && !dataRefreshing) {
-      setDataFetchInitiated(true);
-      setDataRefreshing(true);
-      fetchCommissionData(selectedYear, selectedMonth, false)
-        .finally(() => {
-          setDataRefreshing(false);
-        });
+    // Proceed only if auth is loaded and user is not admin
+    if (!dataFetchInitiated && !dataRefreshing && !affiliateIsLoading) {
+      if (user && user.affiliateCode) {
+        setDataFetchInitiated(true);
+        setDataRefreshing(true);
+        fetchCommissionData(selectedYear, selectedMonth, false)
+          .finally(() => {
+            setDataRefreshing(false);
+          });
+      } else if (user && !user.affiliateCode) {
+        toast.error("Affiliate code not found for your account. Please contact support.");
+        setDataFetchInitiated(true);
+      } else if (!user) {
+        setDataFetchInitiated(true);
+      }
     }
-  }, [fetchCommissionData, selectedYear, selectedMonth, isAdmin, navigate, dataRefreshing, dataFetchInitiated]);
+  }, [
+    authIsLoading,
+    user,
+    isAdmin,
+    fetchCommissionData,
+    selectedYear,
+    selectedMonth,
+    navigate,
+    dataRefreshing,
+    dataFetchInitiated,
+    affiliateIsLoading
+  ]);
 
   useEffect(() => {
     if (error) {
@@ -48,11 +70,10 @@ export default function Dashboard() {
   }, [error]);
 
   const handleMonthChange = (year: number, month: number) => {
-    // Only trigger a data refetch if the year or month changes
     if (year !== selectedYear || month !== selectedMonth) {
       setSelectedYear(year);
       setSelectedMonth(month);
-      setDataFetchInitiated(false); // Reset fetch flag when month changes
+      setDataFetchInitiated(false);
     }
   };
 
@@ -66,12 +87,12 @@ export default function Dashboard() {
   };
 
   const handleRefresh = async () => {
-    if (!dataRefreshing) {
+    if (!dataRefreshing && user?.affiliateCode) {
       setDataRefreshing(true);
       console.log("Force refreshing data from Stripe...");
       
       try {
-        await fetchCommissionData(selectedYear, selectedMonth, true); // Force refresh
+        await fetchCommissionData(selectedYear, selectedMonth, true);
         toast.success("Data refreshed from Stripe");
       } catch (error) {
         console.error("Refresh error:", error);
@@ -83,13 +104,41 @@ export default function Dashboard() {
   };
 
   const renderDashboardContent = () => {
-    if (isLoading && !summary) {
+    if (authIsLoading) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading user data...</span>
+        </div>
+      );
+    }
+
+    if (user && !user.affiliateCode && !isAdmin) {
+      return (
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              <p className="text-sm text-orange-600">
+                Affiliate code not found for your account. Dashboard data cannot be loaded. Please contact support.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    if (affiliateIsLoading && !summary) {
       return (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading your commission data...</span>
         </div>
       );
+    }
+
+    if (!user?.affiliateCode && !isAdmin) {
+      return null;
     }
 
     return (
@@ -116,7 +165,7 @@ export default function Dashboard() {
           />
           <StatsCard
             title="Your Code"
-            value={user?.affiliateCode || ""}
+            value={user?.affiliateCode || "N/A"}
             description="Share this code with your audience"
             icon={<Calendar className="w-4 h-4" />}
             className="bg-secondary/10"
@@ -131,13 +180,18 @@ export default function Dashboard() {
                 variant="ghost" 
                 size="sm" 
                 onClick={handleCopyLink}
+                disabled={!user?.affiliateCode}
               >
                 Copy
               </Button>
             </CardHeader>
             <CardContent>
               <div className="bg-muted p-3 rounded-md overflow-x-auto">
-                <code className="text-sm">https://whaamkabaam.com/?ref={user?.affiliateCode}</code>
+                <code className="text-sm">
+                  {user?.affiliateCode 
+                    ? `https://whaamkabaam.com/?ref=${user.affiliateCode}`
+                    : "No affiliate code available."}
+                </code>
               </div>
             </CardContent>
           </Card>
@@ -155,10 +209,10 @@ export default function Dashboard() {
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing}>
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing || !user?.affiliateCode}>
                 {dataRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled={!user?.affiliateCode}>
                 View All
               </Button>
             </div>

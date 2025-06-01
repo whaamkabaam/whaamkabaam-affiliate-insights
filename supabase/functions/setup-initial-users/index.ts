@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
 import { createClient as createAdminClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
@@ -87,10 +86,10 @@ serve(async (req) => {
       console.log("Setting up affiliate entries for users...");
       
       const affiliateSetups = [
-        { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1 },
-        { email: "nic@whaamkabaam.com", code: "nic", rate: 0.1 },  // Make sure "nic" is added
-        { email: "maru@whaamkabaam.com", code: "maru", rate: 0.1 }, // Make sure "maru" is added
-        { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2 }
+        { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1, stripePromoId: "promo_ayoub" },
+        { email: "nic@whaamkabaam.com", code: "nic", rate: 0.1, stripePromoId: "promo_1QyefCCgyJ2z2jNZEZv16p7s" },
+        { email: "maru@whaamkabaam.com", code: "maru", rate: 0.1, stripePromoId: "promo_1QvpMsCgyJ2z2jNZ0IC6vKLk" },
+        { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2, stripePromoId: "promo_admin" }
       ];
       
       for (const setup of affiliateSetups) {
@@ -119,16 +118,20 @@ serve(async (req) => {
             continue;
           }
           
+          const affiliatePayload = {
+            user_id: userData.id,
+            affiliate_code: setup.code,
+            commission_rate: setup.rate,
+            stripe_promotion_code_id: setup.stripePromoId
+          };
+          
           if (existingAffiliates && existingAffiliates.length > 0) {
             console.log(`Affiliate entry already exists for ${setup.email}, updating...`);
             
             // Update existing entry
             const { error: updateError } = await supabaseAdmin
               .from('affiliates')
-              .update({ 
-                affiliate_code: setup.code, 
-                commission_rate: setup.rate 
-              })
+              .update(affiliatePayload)
               .eq('user_id', userData.id);
               
             if (updateError) {
@@ -142,11 +145,7 @@ serve(async (req) => {
             // Create new affiliate entry
             const { error: insertError } = await supabaseAdmin
               .from('affiliates')
-              .insert({
-                user_id: userData.id,
-                affiliate_code: setup.code,
-                commission_rate: setup.rate
-              });
+              .insert(affiliatePayload);
               
             if (insertError) {
               console.error(`Error creating affiliate entry: ${insertError.message}`);
