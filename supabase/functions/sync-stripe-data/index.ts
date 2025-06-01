@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -11,6 +10,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Constants for Ayoub's commission logic
+  const AYOUB_AFFILIATE_CODE = "ayoub";
+  const AYOUB_COACHING_PRODUCT_ID = "prod_RINO6yE0y4O9gX"; // Confirmed this is correct
+  const AYOUB_FLAT_COMMISSION = 20; // $20
+  const AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION = [ // Specific promo IDs for Ayoub's $20 flat rate
+    "promo_1QccV9CgyJ2z2jNZBnSTn73U",
+    "promo_1QccV9CgyJ2z2jNZpn1g55Dm",
+    "promo_1QccV9CgyJ2z2jNZ5NxQQDGO",
+    "promo_1QccV9CgyJ2z2jNZMLVi7Lv7"
+  ];
 
   try {
     const requestData = await req.json();
@@ -172,16 +182,74 @@ serve(async (req) => {
 
         console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId})`);
 
-        // Calculate commission (10% of amount paid)
-        const amountPaid = (session.amount_total || 0) / 100; // Convert cents to dollars
-        const affiliateCommission = amountPaid * 0.10;
+        // --- Start of NEW commission logic ---
+        const amountPaid = (session.amount_total || 0) / 100;
+        let affiliateCommission = 0;
+
+        // 'affiliateCode' is your internal code (e.g., "ayoub", "nic") derived from stripeToAffiliateMap
+        // 'stripePromotionCodeId' is the actual ID of the promo code or coupon applied to the Stripe session
+
+        if (affiliateCode === AYOUB_AFFILIATE_CODE) {
+          const actualProductIdInSession = session.line_items?.data?.[0]?.price?.product || null;
+          console.log(`SyncStripe: Processing session ${session.id} for AYOUB. Product: ${actualProductIdInSession}. Promo code on session: ${stripePromotionCodeId}`);
+
+          if (actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID) {
+            let ayoubQualifiesForFlatCommission = false;
+
+            if (!session.discounts || session.discounts.length === 0) {
+              // Condition: No discount was used at all for the coaching product sale
+              ayoubQualifiesForFlatCommission = true;
+              console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) had NO discount. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
+            } else {
+              // A discount was used. Check if it's one of the specifically allowed ones for Ayoub's flat commission.
+              if (stripePromotionCodeId && AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION.includes(stripePromotionCodeId)) {
+                ayoubQualifiesForFlatCommission = true;
+                console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used an ALLOWED promo ID ${stripePromotionCodeId}. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
+              } else {
+                // A discount was used, but it's not one of the special ones for Ayoub's flat rate.
+                // In this scenario, Ayoub gets $0 for this specific product if the discount used wasn't in the allowed list.
+                console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used promo ID ${stripePromotionCodeId} (or some other discount), which is NOT in the allowed list for the flat $20 commission. Commission $0.`);
+              }
+            }
+
+            if (ayoubQualifiesForFlatCommission) {
+              affiliateCommission = AYOUB_FLAT_COMMISSION;
+            } else {
+              affiliateCommission = 0; // Explicitly $0 if conditions not met for the coaching product
+            }
+          } else {
+            // It's Ayoub, but NOT the coaching product. Ayoub only gets commission on the coaching product.
+            affiliateCommission = 0;
+            console.log(`SyncStripe: AYOUB - Session ${session.id} - Product ${actualProductIdInSession} is not the coaching product (${AYOUB_COACHING_PRODUCT_ID}). No commission for Ayoub.`);
+          }
+        } else if (affiliateCode) { // For other affiliates (Nic, Maru, etc.)
+          console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
+          const { data: affiliateDetails, error: fetchRateError } = await supabaseClient
+            .from('affiliates')
+            .select('commission_rate') // Assuming 'commission_rate' stores values like 0.10 for 10%
+            .eq('affiliate_code', affiliateCode)
+            .single();
+
+          if (fetchRateError || !affiliateDetails) {
+            console.error(`SyncStripe: Could not fetch commission rate for affiliate ${affiliateCode} (Session: ${session.id}):`, fetchRateError?.message);
+            affiliateCommission = 0; 
+            console.warn(`SyncStripe: Assigning $0 commission for session ${session.id} due to missing rate for ${affiliateCode}.`);
+          } else {
+            const commissionRate = affiliateDetails.commission_rate;
+            affiliateCommission = amountPaid * commissionRate;
+            console.log(`SyncStripe: Calculated commission for ${affiliateCode} (Session: ${session.id}): AmountPaid $${amountPaid} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)}`);
+          }
+        }
+        // If affiliateCode is null (no mapping found), affiliateCommission remains 0.
+        // The 'continue' after 'No affiliate mapping found' already handles skipping these.
+        // --- End of NEW commission logic ---
 
         const record = {
           session_id: session.id,
           payment_intent_id: session.payment_intent || null,
           customer_email: session.customer_details?.email || null,
           amount_paid: amountPaid,
-          affiliate_commission: affiliateCommission,
+          affiliate_commission: parseFloat(affiliateCommission.toFixed(2)),
           promo_code_name: affiliateCode, // Store internal affiliate code
           promo_code_id: stripePromotionCodeId, // Store Stripe promotion code ID
           product_id: session.line_items?.data?.[0]?.price?.product || null,
