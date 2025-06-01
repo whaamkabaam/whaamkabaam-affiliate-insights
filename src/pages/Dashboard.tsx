@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { StatsCard } from "@/components/StatsCard";
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [dataRefreshing, setDataRefreshing] = useState(false);
+  const [initialDataFetched, setInitialDataFetched] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging to track loading states
@@ -35,7 +36,18 @@ export default function Dashboard() {
     }
   }, [authIsLoading, isAdmin, navigate]);
 
-  // Simplified data fetching effect - only depends on affiliate code and date selection
+  // Memoized month change handler to prevent unnecessary re-renders
+  const handleMonthChange = useCallback((year: number, month: number) => {
+    console.log("Month changed to:", year, month);
+    // Only update if actually different
+    if (year !== selectedYear || month !== selectedMonth) {
+      setSelectedYear(year);
+      setSelectedMonth(month);
+      setInitialDataFetched(false); // Reset to allow new fetch
+    }
+  }, [selectedYear, selectedMonth]);
+
+  // Single effect for data fetching with proper dependencies
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
@@ -48,20 +60,23 @@ export default function Dashboard() {
       return;
     }
 
-    // Only proceed if we have a user with an affiliate code
-    if (user?.affiliateCode && !affiliateIsLoading) {
+    // Only proceed if we have a user with an affiliate code and haven't fetched initial data
+    if (user?.affiliateCode && !affiliateIsLoading && !initialDataFetched) {
       console.log("Fetching commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
+      setInitialDataFetched(true);
+      
       fetchCommissionData(selectedYear, selectedMonth, false)
         .then(() => {
           console.log("Commission data fetch completed successfully");
         })
         .catch((err) => {
           console.error("Commission data fetch failed:", err);
+          setInitialDataFetched(false); // Allow retry on error
         });
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, selectedYear, selectedMonth, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData]);
+  }, [user?.affiliateCode, selectedYear, selectedMonth, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, initialDataFetched]);
 
   // Handle error display
   useEffect(() => {
@@ -70,12 +85,6 @@ export default function Dashboard() {
       toast.error(error);
     }
   }, [error]);
-
-  const handleMonthChange = (year: number, month: number) => {
-    console.log("Month changed to:", year, month);
-    setSelectedYear(year);
-    setSelectedMonth(month);
-  };
 
   const handleCopyLink = () => {
     if (user?.affiliateCode) {
@@ -261,7 +270,11 @@ export default function Dashboard() {
                 Here's what's happening with your affiliate account today.
               </p>
             </div>
-            <MonthPicker onMonthChange={handleMonthChange} />
+            <MonthPicker 
+              onMonthChange={handleMonthChange}
+              defaultYear={selectedYear}
+              defaultMonth={selectedMonth}
+            />
           </div>
 
           {renderDashboardContent()}

@@ -164,7 +164,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     
     // Check if we're already fetching the same data
     if (currentFetchKey === fetchKey && isLoading && !shouldForceFetch) {
-      console.log(`Already fetching data for ${fetchKey}`);
+      console.log(`Already fetching data for ${fetchKey}, skipping duplicate request`);
       return;
     }
     
