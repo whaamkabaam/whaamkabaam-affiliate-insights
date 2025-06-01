@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -272,8 +271,6 @@ export default function Dashboard() {
             </div>
             <MonthPicker 
               onMonthChange={handleMonthChange}
-              defaultYear={selectedYear}
-              defaultMonth={selectedMonth}
             />
           </div>
 
