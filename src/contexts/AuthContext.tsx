@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -34,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Helper function to create a promise with timeout
+  // Helper function to create a promise with timeout (reduced to 5 seconds)
   const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
     return Promise.race([
       promise,
@@ -44,66 +45,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     ]);
   };
 
-  // Replace the existing fetchUserData function with this one:
+  // Optimized fetchUserData function with better error handling
   const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
       console.log("AuthContext: Starting fetchUserData for userId:", userId);
 
-      // Perform all data fetching operations concurrently with timeout
-      console.log("AuthContext: Making concurrent RPC calls...");
+      // Reduce timeout to 5 seconds since we've optimized the database
+      const timeoutMs = 5000;
       
-      // Track individual promise completion
-      let roleResult, affiliateResult, profileResult;
+      // Perform all data fetching operations concurrently with reduced timeout
+      console.log("AuthContext: Making concurrent RPC calls with optimized timeout...");
       
-      try {
-        console.log("AuthContext: Starting role promise...");
-        roleResult = await withTimeout(
+      const [roleResult, affiliateResult, profileResult] = await Promise.allSettled([
+        withTimeout(
           Promise.resolve(supabase.rpc('get_user_role', { user_id: userId })),
-          10000,
+          timeoutMs,
           'get_user_role'
-        );
-        console.log("AuthContext: Role promise completed:", roleResult);
-      } catch (error) {
-        console.error("AuthContext: Role promise failed:", error);
-        roleResult = { data: null, error };
-      }
-
-      try {
-        console.log("AuthContext: Starting affiliate promise...");
-        affiliateResult = await withTimeout(
+        ),
+        withTimeout(
           Promise.resolve(supabase.rpc('get_affiliate_data', { p_user_id: userId })),
-          10000,
+          timeoutMs,
           'get_affiliate_data'
-        );
-        console.log("AuthContext: Affiliate promise completed:", affiliateResult);
-      } catch (error) {
-        console.error("AuthContext: Affiliate promise failed:", error);
-        affiliateResult = { data: null, error };
-      }
-
-      try {
-        console.log("AuthContext: Starting profile promise...");
-        profileResult = await withTimeout(
+        ),
+        withTimeout(
           Promise.resolve(supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()),
-          10000,
+          timeoutMs,
           'profiles_query'
-        );
-        console.log("AuthContext: Profile promise completed:", profileResult);
-      } catch (error) {
-        console.error("AuthContext: Profile promise failed:", error);
-        profileResult = { data: null, error };
-      }
+        )
+      ]);
 
       console.log("AuthContext: All promises resolved. Processing results...");
 
-      const { data: roleData, error: roleError } = roleResult;
-      const { data: affiliateRpcData, error: affiliateError } = affiliateResult;
-      const { data: profileData, error: profileError } = profileResult;
+      // Process results with better error handling
+      const roleData = roleResult.status === 'fulfilled' ? roleResult.value.data : null;
+      const roleError = roleResult.status === 'rejected' ? roleResult.reason : (roleResult.status === 'fulfilled' ? roleResult.value.error : null);
+
+      const affiliateRpcData = affiliateResult.status === 'fulfilled' ? affiliateResult.value.data : null;
+      const affiliateError = affiliateResult.status === 'rejected' ? affiliateResult.reason : (affiliateResult.status === 'fulfilled' ? affiliateResult.value.error : null);
+
+      const profileData = profileResult.status === 'fulfilled' ? profileResult.value.data : null;
+      const profileError = profileResult.status === 'rejected' ? profileResult.reason : (profileResult.status === 'fulfilled' ? profileResult.value.error : null);
 
       // Log any errors encountered during fetching
-      if (roleError) console.error("AuthContext: Error checking admin role:", roleError.message);
-      if (affiliateError) console.error("AuthContext: Error fetching affiliate data from RPC:", affiliateError.message);
-      if (profileError) console.error("AuthContext: Error fetching profile data:", profileError.message);
+      if (roleError) console.error("AuthContext: Error checking admin role:", roleError.message || roleError);
+      if (affiliateError) console.error("AuthContext: Error fetching affiliate data from RPC:", affiliateError.message || affiliateError);
+      if (profileError) console.error("AuthContext: Error fetching profile data:", profileError.message || profileError);
 
       console.log("AuthContext: User role data from RPC:", roleData);
       console.log("AuthContext: Affiliate data from RPC (get_affiliate_data):", affiliateRpcData);
@@ -121,10 +107,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Fallback logic if no affiliate code is found yet (important for Maru as per logs)
-      if (!determinedAffiliateCode && currentUser.email) {
+      // Simplified fallback logic - only for known users if RPC fails
+      if (!determinedAffiliateCode && currentUser.email && (roleError || affiliateError)) {
         const emailLower = currentUser.email.toLowerCase();
-        console.log("AuthContext: Checking email-based fallbacks for:", emailLower);
+        console.log("AuthContext: Using fallback logic for:", emailLower);
         if (emailLower === 'nic@whaamkabaam.com') {
           determinedAffiliateCode = 'nic';
           console.log("AuthContext: Assigned FALLBACK affiliate code 'nic' based on email");
@@ -132,11 +118,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           determinedAffiliateCode = 'maru';
           console.log("AuthContext: Assigned FALLBACK affiliate code 'maru' based on email");
         }
-        // Add other fallbacks if necessary, e.g. for 'ayoub' if his RPC also fails
-        // else if (emailLower === 'ayoub@whaamkabaam.com') {
-        //   determinedAffiliateCode = 'ayoub';
-        //   console.log("AuthContext: Assigned FALLBACK affiliate code 'ayoub' based on email");
-        // }
       }
       
       console.log("AuthContext: Building final user object...");
@@ -165,23 +146,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Replace your main useEffect for auth state changes and session loading with this:
+  // Simplified auth state management
   useEffect(() => {
     console.log("AuthContext: Initializing auth state listener and session check.");
-    setIsLoading(true); // Start with loading true
-
+    
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         console.log("AuthContext: Auth state changed. Event:", event, "Session exists:", !!newSession);
-        setSession(newSession); // Update session state regardless
+        setSession(newSession);
 
         if (newSession?.user) {
-          console.log("AuthContext: User found in new/changed session:", newSession.user.email);
+          console.log("AuthContext: User found in session:", newSession.user.email);
+          setIsLoading(true);
           try {
             const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
             console.log("AuthContext: fetchUserData completed successfully:", detailedUser);
             setUser(detailedUser);
-            setIsAdmin(detailedUser.role === 'admin'); // Set isAdmin based on fetched data
+            setIsAdmin(detailedUser.role === 'admin');
           } catch (error) {
             console.error("AuthContext: Error in fetchUserData:", error);
             // Set a minimal user to prevent infinite loading
@@ -194,53 +175,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsAdmin(false);
           }
         } else {
-          console.log("AuthContext: No user in new/changed session. Clearing user state.");
+          console.log("AuthContext: No user in session. Clearing user state.");
           setUser(null);
           setIsAdmin(false);
         }
-        setIsLoading(false); // Finish loading after processing
+        setIsLoading(false);
       }
     );
 
     // Initial session check
     supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
       console.log("AuthContext: Initial getSession complete. Session exists:", !!existingSession);
-      // No need to set session again if onAuthStateChange already handled it, but good for initial load
-      if (existingSession) {
-          setSession(existingSession); // Set session if found
-          if (existingSession.user) {
-              console.log("AuthContext: User found in existing session:", existingSession.user.email);
-               // Only set user if not already set by onAuthStateChange or if different user
-              if (!user || user.id !== existingSession.user.id) {
-                  try {
-                    const detailedUser = await fetchUserData(existingSession.user.id, existingSession.user);
-                    console.log("AuthContext: Initial session fetchUserData completed:", detailedUser);
-                    setUser(detailedUser);
-                    setIsAdmin(detailedUser.role === 'admin');
-                  } catch (error) {
-                    console.error("AuthContext: Error in initial fetchUserData:", error);
-                    // Set a minimal user to prevent infinite loading
-                    setUser({
-                      ...existingSession.user,
-                      role: 'affiliate',
-                      affiliateCode: existingSession.user.user_metadata?.affiliate_code,
-                      name: existingSession.user.email?.split('@')[0] || "User"
-                    });
-                    setIsAdmin(false);
-                  }
-              }
-          } else { // existingSession but no user object
-              setUser(null);
-              setIsAdmin(false);
-          }
-      } else { // No existing session
-        setUser(null);
-        setIsAdmin(false);
+      if (!existingSession) {
+        setIsLoading(false);
       }
-      setIsLoading(false); // Finish loading after initial check
+      // onAuthStateChange will handle the session if it exists
     }).catch((err) => {
         console.error("AuthContext: Error during initial getSession:", err);
-        setIsLoading(false); // Ensure loading is false on error too
+        setIsLoading(false);
     });
 
     return () => {
@@ -249,7 +201,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log("AuthContext: Unsubscribed from auth state changes.");
       }
     };
-  }, []); // Empty dependency array ensures this runs once on mount
+  }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
