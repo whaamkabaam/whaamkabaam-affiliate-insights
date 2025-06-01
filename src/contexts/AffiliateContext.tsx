@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,7 +68,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
   const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
-  const [fetchedMonthYearCombos, setFetchedMonthYearCombos] = useState<Set<string>>(new Set());
+  const [lastFetchedMonthYear, setLastFetchedMonthYear] = useState<string | null>(null);
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
   const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
@@ -155,29 +156,30 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
 
     // Generate a unique key for this fetch operation
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
+    const monthYearKey = `${year}-${month}`;
     
-    // Check if we've already fetched this month's data and not forcing refresh
-    if (!forceRefresh && fetchedMonthYearCombos.has(fetchKey)) {
-      console.log(`Already fetched data for ${fetchKey}, using cached data`);
-      return;
-    }
+    // Check if we're switching to a different month/year - if so, always fetch fresh data
+    const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
+    const shouldForceFetch = forceRefresh || isMonthYearChange;
     
     // Check if we're already fetching the same data
-    if (currentFetchKey === fetchKey && isLoading && !forceRefresh) {
+    if (currentFetchKey === fetchKey && isLoading && !shouldForceFetch) {
       console.log(`Already fetching data for ${fetchKey}`);
       return;
     }
     
+    // Update the tracked month/year
+    setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${forceRefresh}`);
+      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${shouldForceFetch}, isMonthYearChange: ${isMonthYearChange}`);
       
-      // If forcing refresh, sync data from Stripe first
-      if (forceRefresh) {
-        console.log("Force refresh requested, syncing from Stripe...");
+      // If forcing refresh or switching months, sync data from Stripe first
+      if (shouldForceFetch) {
+        console.log("Force refresh or month change detected, syncing from Stripe...");
         
         const { error: syncError } = await supabase.functions.invoke("sync-stripe-data", {
           body: {
@@ -223,13 +225,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       setCommissions(data.commissions || []);
       setSummary(data.summary || defaultSummary);
       
-      // Add this fetch to our tracking set
-      setFetchedMonthYearCombos(prev => {
-        const newSet = new Set(prev);
-        newSet.add(fetchKey);
-        return newSet;
-      });
-      
       // Update monthly stats
       const key = `${year}-${month.toString().padStart(2, '0')}`;
       const newMonthlyStats = {
@@ -249,7 +244,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
       setCurrentFetchKey(null);
     }
-  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, fetchedMonthYearCombos]);
+  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, lastFetchedMonthYear]);
 
   const getMonthlyStats = useCallback(async (year: number, month: number): Promise<MonthlyStats> => {
     // Skip for admin users
@@ -263,13 +258,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       return monthlyStats[key];
     }
     
-    // Generate a fetch key to check if we've already attempted to fetch this data
-    const fetchKey = `${user?.affiliateCode}-${year}-${month}`;
-    if (fetchedMonthYearCombos.has(fetchKey)) {
-      // Return existing stats or defaults if no data was found
-      return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
-    }
-    
     try {
       await fetchCommissionData(year, month);
       return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
@@ -277,7 +265,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       console.error(`Error in getMonthlyStats for ${year}-${month}:`, error);
       return { totalCommission: 0, customerCount: 0 };
     }
-  }, [isAdmin, monthlyStats, user?.affiliateCode, fetchedMonthYearCombos, fetchCommissionData]);
+  }, [isAdmin, monthlyStats, fetchCommissionData]);
 
   // Effect to fetch initial affiliate overview data for admin users with delayed initialization
   useEffect(() => {
@@ -302,10 +290,10 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [isAuthenticated, isAdmin, fetchAffiliateOverviews]);
 
-  // Reset the fetch tracking when the user changes
+  // Reset tracking when the user changes
   useEffect(() => {
     if (user?.affiliateCode) {
-      setFetchedMonthYearCombos(new Set());
+      setLastFetchedMonthYear(null);
     }
   }, [user?.affiliateCode]);
 
