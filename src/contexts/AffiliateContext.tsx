@@ -49,6 +49,27 @@ const defaultSummary: CommissionSummary = {
   customerCount: 0
 };
 
+// Helper function to filter out hardcoded example data
+const filterCommissions = (commissions: Commission[]): Commission[] => {
+  return commissions.filter(commission => 
+    commission.customerEmail && 
+    !commission.customerEmail.includes('unknown@example.com') &&
+    !commission.customerEmail.includes('example.com') &&
+    commission.customerEmail !== 'unknown@example.com'
+  );
+};
+
+// Helper function to calculate summary from filtered commissions
+const calculateSummary = (commissions: Commission[]): CommissionSummary => {
+  const filteredCommissions = filterCommissions(commissions);
+  
+  return {
+    totalRevenue: filteredCommissions.reduce((sum, commission) => sum + commission.amount, 0),
+    totalCommission: filteredCommissions.reduce((sum, commission) => sum + commission.commission, 0),
+    customerCount: new Set(filteredCommissions.map(commission => commission.customerEmail)).size
+  };
+};
+
 const AffiliateContext = createContext<AffiliateContextType | undefined>(undefined);
 
 export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
@@ -214,8 +235,12 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
 
       console.log(`Received ${data.commissions?.length || 0} commissions`);
       
-      setCommissions(data.commissions || []);
-      setSummary(data.summary || defaultSummary);
+      const rawCommissions = data.commissions || [];
+      setCommissions(rawCommissions);
+      
+      // Calculate summary based on filtered commissions
+      const calculatedSummary = calculateSummary(rawCommissions);
+      setSummary(calculatedSummary);
 
     } catch (err) {
       console.error("Exception during commission fetch:", err);

@@ -124,9 +124,6 @@ export function CommissionTable({ limit }: CommissionTableProps) {
               <TableCell>{formatDate(commission.date)}</TableCell>
               <TableCell>
                 {formatCustomerName(commission.customerEmail)}
-                <div className="text-xs text-muted-foreground">
-                  {commission.customerEmail}
-                </div>
               </TableCell>
               <TableCell>{formatProductName(commission.productId)}</TableCell>
               <TableCell className="text-right">${commission.amount.toFixed(2)}</TableCell>
