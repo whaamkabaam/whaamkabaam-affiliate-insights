@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Helper function to create a promise with timeout (reduced to 5 seconds)
+  // Helper function to create a promise with timeout (reduced to 3 seconds)
   const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
     return Promise.race([
       promise,
@@ -45,17 +45,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     ]);
   };
 
-  // Optimized fetchUserData function with better error handling
+  // Enhanced email-based fallback mapping
+  const getAffiliateCodeFromEmail = (email: string): string | undefined => {
+    const emailLower = email.toLowerCase();
+    const emailToCodeMap: Record<string, string> = {
+      'nic@whaamkabaam.com': 'nic',
+      'maru@whaamkabaam.com': 'maru',
+      'ayoub@whaamkabaam.com': 'ayoub'
+    };
+    return emailToCodeMap[emailLower];
+  };
+
+  // Optimized fetchUserData function with improved error handling and fallbacks
   const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
       console.log("AuthContext: Starting fetchUserData for userId:", userId);
 
-      // Reduce timeout to 5 seconds since we've optimized the database
-      const timeoutMs = 5000;
+      // Reduce timeout to 3 seconds since we've optimized the database
+      const timeoutMs = 3000;
       
-      // Perform all data fetching operations concurrently with reduced timeout
-      console.log("AuthContext: Making concurrent RPC calls with optimized timeout...");
+      console.log("AuthContext: Making concurrent RPC calls with reduced timeout...");
       
+      // First, try to get affiliate code from user metadata or email fallback
+      let primaryAffiliateCode = currentUser.user_metadata?.affiliate_code;
+      if (!primaryAffiliateCode && currentUser.email) {
+        primaryAffiliateCode = getAffiliateCodeFromEmail(currentUser.email);
+        console.log("AuthContext: Using email-based fallback for affiliate code:", primaryAffiliateCode);
+      }
+
+      // Perform data fetching operations concurrently with timeout
       const [roleResult, affiliateResult, profileResult] = await Promise.allSettled([
         withTimeout(
           Promise.resolve(supabase.rpc('get_user_role', { user_id: userId })),
@@ -76,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log("AuthContext: All promises resolved. Processing results...");
 
-      // Process results with better error handling
+      // Process results with improved error handling
       const roleData = roleResult.status === 'fulfilled' ? roleResult.value.data : null;
       const roleError = roleResult.status === 'rejected' ? roleResult.reason : (roleResult.status === 'fulfilled' ? roleResult.value.error : null);
 
@@ -95,10 +113,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("AuthContext: Affiliate data from RPC (get_affiliate_data):", affiliateRpcData);
       console.log("AuthContext: Profile data from DB:", profileData);
 
-      let determinedAffiliateCode: string | undefined = currentUser.user_metadata?.affiliate_code;
-      console.log("AuthContext: Initial affiliate code from user_metadata:", determinedAffiliateCode);
+      // Determine affiliate code with improved fallback logic
+      let determinedAffiliateCode = primaryAffiliateCode; // Start with metadata or email fallback
+      console.log("AuthContext: Primary affiliate code (metadata/email):", determinedAffiliateCode);
 
-      // Try to get affiliate_code from the RPC call's result
+      // Try to get affiliate_code from the RPC call's result if we don't have one yet
       if (!determinedAffiliateCode && affiliateRpcData && typeof affiliateRpcData === 'object' && 'affiliate_code' in affiliateRpcData) {
         const rpcAffiliateCode = (affiliateRpcData as { affiliate_code?: string }).affiliate_code;
         if (rpcAffiliateCode) {
@@ -107,16 +126,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Simplified fallback logic - only for known users if RPC fails
+      // Final fallback - use email-based assignment if we still don't have a code and there were errors
       if (!determinedAffiliateCode && currentUser.email && (roleError || affiliateError)) {
-        const emailLower = currentUser.email.toLowerCase();
-        console.log("AuthContext: Using fallback logic for:", emailLower);
-        if (emailLower === 'nic@whaamkabaam.com') {
-          determinedAffiliateCode = 'nic';
-          console.log("AuthContext: Assigned FALLBACK affiliate code 'nic' based on email");
-        } else if (emailLower === 'maru@whaamkabaam.com') {
-          determinedAffiliateCode = 'maru';
-          console.log("AuthContext: Assigned FALLBACK affiliate code 'maru' based on email");
+        determinedAffiliateCode = getAffiliateCodeFromEmail(currentUser.email);
+        if (determinedAffiliateCode) {
+          console.log("AuthContext: Final fallback - assigned affiliate code based on email:", determinedAffiliateCode);
         }
       }
       
@@ -134,14 +148,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       console.error("AuthContext: Critical error in fetchUserData for user ID " + userId + ":", err.message);
       console.error("AuthContext: Full error object:", err);
-      // Fallback to a minimal user object in case of unexpected errors
+      
+      // Enhanced fallback user object with more reliable affiliate code assignment
+      const fallbackAffiliateCode = currentUser.user_metadata?.affiliate_code || 
+                                  (currentUser.email ? getAffiliateCodeFromEmail(currentUser.email) : undefined);
+      
       const fallbackUser = { 
           ...currentUser, 
           role: 'affiliate' as AppRole, // Default role
-          affiliateCode: currentUser.user_metadata?.affiliate_code, 
+          affiliateCode: fallbackAffiliateCode, 
           name: currentUser.email?.split('@')[0] || "User"
       };
-      console.log("AuthContext: Returning fallback user object:", fallbackUser);
+      console.log("AuthContext: Returning enhanced fallback user object:", fallbackUser);
       return fallbackUser;
     }
   };
@@ -165,11 +183,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsAdmin(detailedUser.role === 'admin');
           } catch (error) {
             console.error("AuthContext: Error in fetchUserData:", error);
-            // Set a minimal user to prevent infinite loading
+            // Set a more robust minimal user to prevent infinite loading
+            const fallbackAffiliateCode = newSession.user.user_metadata?.affiliate_code || 
+                                        (newSession.user.email ? getAffiliateCodeFromEmail(newSession.user.email) : undefined);
+            
             setUser({
               ...newSession.user,
               role: 'affiliate',
-              affiliateCode: newSession.user.user_metadata?.affiliate_code,
+              affiliateCode: fallbackAffiliateCode,
               name: newSession.user.email?.split('@')[0] || "User"
             });
             setIsAdmin(false);

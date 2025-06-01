@@ -20,76 +20,50 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [dataRefreshing, setDataRefreshing] = useState(false);
-  const [dataFetchInitiated, setDataFetchInitiated] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging to track loading states
   console.log("Dashboard render - Auth loading:", authIsLoading, "User:", user?.email, "Is admin:", isAdmin);
   console.log("Dashboard render - Affiliate loading:", affiliateIsLoading, "Has summary:", !!summary, "Error:", error);
-  console.log("Dashboard render - Data fetch initiated:", dataFetchInitiated, "Data refreshing:", dataRefreshing);
+  console.log("Dashboard render - User affiliate code:", user?.affiliateCode);
 
+  // Redirect admin users to admin dashboard
   useEffect(() => {
-    console.log("Dashboard useEffect triggered");
-    
+    if (!authIsLoading && isAdmin) {
+      console.log("User is admin, redirecting to /admin");
+      navigate("/admin");
+    }
+  }, [authIsLoading, isAdmin, navigate]);
+
+  // Simplified data fetching effect - only depends on affiliate code and date selection
+  useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
       console.log("Auth still loading, waiting...");
       return;
     }
 
+    // Skip if user is admin (they'll be redirected)
     if (isAdmin) {
-      console.log("User is admin, redirecting to /admin");
-      navigate("/admin");
       return;
     }
 
-    // Proceed only if auth is loaded and user is not admin
-    if (!dataFetchInitiated && !dataRefreshing && !affiliateIsLoading) {
-      if (user && user.affiliateCode) {
-        console.log("Initiating data fetch for affiliate:", user.affiliateCode);
-        setDataFetchInitiated(true);
-        setDataRefreshing(true);
-        fetchCommissionData(selectedYear, selectedMonth, false)
-          .then(() => {
-            console.log("Commission data fetch completed successfully");
-          })
-          .catch((err) => {
-            console.error("Commission data fetch failed:", err);
-          })
-          .finally(() => {
-            console.log("Commission data fetch finished, setting refreshing to false");
-            setDataRefreshing(false);
-          });
-      } else if (user && !user.affiliateCode) {
-        console.log("User has no affiliate code:", user.email);
-        toast.error("Affiliate code not found for your account. Please contact support.");
-        setDataFetchInitiated(true);
-      } else if (!user) {
-        console.log("No user found after auth loading completed");
-        setDataFetchInitiated(true);
-      }
-    } else {
-      console.log("Skipping data fetch - conditions not met:", {
-        dataFetchInitiated,
-        dataRefreshing,
-        affiliateIsLoading,
-        hasUser: !!user,
-        hasAffiliateCode: !!user?.affiliateCode
-      });
+    // Only proceed if we have a user with an affiliate code
+    if (user?.affiliateCode && !affiliateIsLoading) {
+      console.log("Fetching commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
+      fetchCommissionData(selectedYear, selectedMonth, false)
+        .then(() => {
+          console.log("Commission data fetch completed successfully");
+        })
+        .catch((err) => {
+          console.error("Commission data fetch failed:", err);
+        });
+    } else if (user && !user.affiliateCode) {
+      console.log("User has no affiliate code:", user.email);
     }
-  }, [
-    authIsLoading,
-    user,
-    isAdmin,
-    fetchCommissionData,
-    selectedYear,
-    selectedMonth,
-    navigate,
-    dataRefreshing,
-    dataFetchInitiated,
-    affiliateIsLoading
-  ]);
+  }, [user?.affiliateCode, selectedYear, selectedMonth, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData]);
 
+  // Handle error display
   useEffect(() => {
     if (error) {
       console.error("Affiliate context error:", error);
@@ -98,12 +72,9 @@ export default function Dashboard() {
   }, [error]);
 
   const handleMonthChange = (year: number, month: number) => {
-    if (year !== selectedYear || month !== selectedMonth) {
-      console.log("Month changed to:", year, month);
-      setSelectedYear(year);
-      setSelectedMonth(month);
-      setDataFetchInitiated(false);
-    }
+    console.log("Month changed to:", year, month);
+    setSelectedYear(year);
+    setSelectedMonth(month);
   };
 
   const handleCopyLink = () => {
@@ -139,7 +110,6 @@ export default function Dashboard() {
     console.log("- user.affiliateCode:", user?.affiliateCode);
     console.log("- isAdmin:", isAdmin);
     console.log("- affiliateIsLoading:", affiliateIsLoading);
-    console.log("- summary exists:", !!summary);
 
     if (authIsLoading) {
       console.log("Showing auth loading screen");
