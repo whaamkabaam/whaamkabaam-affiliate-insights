@@ -4,29 +4,21 @@ import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function MonthlyCommissionChart() {
-  const { getMonthlyStats, isAdmin } = useAffiliate();
+  const { isAdmin } = useAffiliate();
+  const { user } = useAuth();
   const [chartData, setChartData] = useState<{ month: string; commission: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     
-    const fetchData = async () => {
-      // Avoid fetching if we're already fetching data
-      if (isRefreshing) return;
-      
-      // Mark that we've attempted to fetch data
-      setDataFetchAttempted(true);
-      setIsRefreshing(true);
-      setError(null);
-      
-      // If admin, show placeholder or aggregate data
-      if (isAdmin) {
+    const fetchChartData = async () => {
+      if (!user?.affiliateCode || isAdmin) {
         if (isMounted) {
           setChartData([
             { month: "Jan", commission: 0 },
@@ -36,56 +28,79 @@ export function MonthlyCommissionChart() {
             { month: "May", commission: 0 }
           ]);
           setIsLoading(false);
-          setIsRefreshing(false);
         }
         return;
       }
       
+      setIsLoading(true);
+      setError(null);
+      
       const currentYear = new Date().getFullYear();
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       
-      const data = [];
-      for (let month = 1; month <= 12; month++) {
-        // Only include months up to current month
-        if (month > new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
-          break;
-        }
-        
-        try {
-          const stats = await getMonthlyStats(currentYear, month);
-          if (isMounted) {
-            data.push({
-              month: monthNames[month - 1],
-              commission: Number(stats.totalCommission.toFixed(2)),
-            });
+      try {
+        // Fetch chart data directly from database without affecting global state
+        const data = [];
+        for (let month = 1; month <= 12; month++) {
+          // Only include months up to current month
+          if (month > new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
+            break;
           }
-        } catch (error) {
-          console.error(`Failed to fetch stats for ${currentYear}-${month}:`, error);
-          if (isMounted) {
-            setError("Failed to fetch commission data. Please try again later.");
+          
+          // Calculate date range for this month
+          const startDate = new Date(currentYear, month - 1, 1).toISOString();
+          const endDate = new Date(currentYear, month, 0, 23, 59, 59).toISOString();
+          
+          // Query database directly for this affiliate's commission total for this month
+          const { data: monthlyData, error: queryError } = await supabase
+            .from('promo_code_sales')
+            .select('affiliate_commission')
+            .eq('promo_code_name', user.affiliateCode)
+            .gte('created_at', startDate)
+            .lte('created_at', endDate);
+          
+          if (queryError) {
+            console.error(`Error fetching chart data for ${currentYear}-${month}:`, queryError);
             data.push({
               month: monthNames[month - 1],
               commission: 0,
             });
+            continue;
+          }
+          
+          // Calculate total commission for this month
+          const totalCommission = monthlyData?.reduce((sum, record) => {
+            return sum + (Number(record.affiliate_commission) || 0);
+          }, 0) || 0;
+          
+          if (isMounted) {
+            data.push({
+              month: monthNames[month - 1],
+              commission: Number(totalCommission.toFixed(2)),
+            });
           }
         }
-      }
-      
-      if (isMounted) {
-        setChartData(data);
-        setIsLoading(false);
-        setIsRefreshing(false);
+        
+        if (isMounted) {
+          setChartData(data);
+          setIsLoading(false);
+        }
+        
+      } catch (error) {
+        console.error("Exception during chart data fetch:", error);
+        if (isMounted) {
+          setError("Failed to fetch chart data. Please try again later.");
+          setIsLoading(false);
+        }
       }
     };
 
-    if (!dataFetchAttempted) {
-      fetchData();
-    }
+    fetchChartData();
 
     return () => {
       isMounted = false;
     };
-  }, [getMonthlyStats, isAdmin, isRefreshing, dataFetchAttempted]);
+  }, [user?.affiliateCode, isAdmin]);
 
   if (isLoading && !chartData.length) {
     return (
@@ -140,12 +155,6 @@ export function MonthlyCommissionChart() {
     <Card className="lg:col-span-4">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle>Monthly Commission</CardTitle>
-        {isRefreshing && (
-          <div className="flex items-center text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Updating...
-          </div>
-        )}
       </CardHeader>
       <CardContent>
         <div className="h-80">

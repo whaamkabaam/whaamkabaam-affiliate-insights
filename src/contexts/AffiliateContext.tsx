@@ -21,11 +21,6 @@ export interface CommissionSummary {
   customerCount: number;
 }
 
-export interface MonthlyStats {
-  totalCommission: number;
-  customerCount: number;
-}
-
 export interface AffiliateOverview {
   email: string;
   affiliateCode: string;
@@ -41,9 +36,7 @@ interface AffiliateContextType {
   isLoading: boolean;
   error: string | null;
   summary: CommissionSummary;
-  getMonthlyStats: (year: number, month: number) => Promise<MonthlyStats>;
   fetchCommissionData: (year: number, month: number, forceRefresh?: boolean) => Promise<void>;
-  monthlyStats: Record<string, MonthlyStats>;
   // Admin overview
   affiliateOverviews: AffiliateOverview[];
   fetchAffiliateOverviews: () => Promise<void>;
@@ -63,7 +56,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [monthlyStats, setMonthlyStats] = useState<Record<string, MonthlyStats>>({});
   const [summary, setSummary] = useState<CommissionSummary>(defaultSummary);
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
@@ -224,18 +216,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       
       setCommissions(data.commissions || []);
       setSummary(data.summary || defaultSummary);
-      
-      // Update monthly stats
-      const key = `${year}-${month.toString().padStart(2, '0')}`;
-      const newMonthlyStats = {
-        totalCommission: data.summary?.totalCommission || 0,
-        customerCount: data.summary?.customerCount || 0
-      };
-      
-      setMonthlyStats(prev => ({
-        ...prev,
-        [key]: newMonthlyStats
-      }));
 
     } catch (err) {
       console.error("Exception during commission fetch:", err);
@@ -245,27 +225,6 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       setCurrentFetchKey(null);
     }
   }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, lastFetchedMonthYear]);
-
-  const getMonthlyStats = useCallback(async (year: number, month: number): Promise<MonthlyStats> => {
-    // Skip for admin users
-    if (isAdmin) {
-      return { totalCommission: 0, customerCount: 0 };
-    }
-    
-    const key = `${year}-${month.toString().padStart(2, '0')}`;
-    
-    if (monthlyStats[key]) {
-      return monthlyStats[key];
-    }
-    
-    try {
-      await fetchCommissionData(year, month);
-      return monthlyStats[key] || { totalCommission: 0, customerCount: 0 };
-    } catch (error) {
-      console.error(`Error in getMonthlyStats for ${year}-${month}:`, error);
-      return { totalCommission: 0, customerCount: 0 };
-    }
-  }, [isAdmin, monthlyStats, fetchCommissionData]);
 
   // Effect to fetch initial affiliate overview data for admin users with delayed initialization
   useEffect(() => {
@@ -302,9 +261,7 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     error,
     summary,
-    getMonthlyStats,
     fetchCommissionData,
-    monthlyStats,
     affiliateOverviews,
     fetchAffiliateOverviews,
     isAdmin
