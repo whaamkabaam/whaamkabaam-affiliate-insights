@@ -138,7 +138,7 @@ export type Database = {
         Returns: Json
       }
       get_affiliate_data: {
-        Args: { user_id: string }
+        Args: { p_user_id: string }
         Returns: Json
       }
       get_user_role: {

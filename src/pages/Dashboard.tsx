@@ -23,13 +23,22 @@ export default function Dashboard() {
   const [dataFetchInitiated, setDataFetchInitiated] = useState(false);
   const navigate = useNavigate();
 
+  // Debug logging to track loading states
+  console.log("Dashboard render - Auth loading:", authIsLoading, "User:", user?.email, "Is admin:", isAdmin);
+  console.log("Dashboard render - Affiliate loading:", affiliateIsLoading, "Has summary:", !!summary, "Error:", error);
+  console.log("Dashboard render - Data fetch initiated:", dataFetchInitiated, "Data refreshing:", dataRefreshing);
+
   useEffect(() => {
+    console.log("Dashboard useEffect triggered");
+    
     // Wait for authentication to complete
     if (authIsLoading) {
+      console.log("Auth still loading, waiting...");
       return;
     }
 
     if (isAdmin) {
+      console.log("User is admin, redirecting to /admin");
       navigate("/admin");
       return;
     }
@@ -37,18 +46,36 @@ export default function Dashboard() {
     // Proceed only if auth is loaded and user is not admin
     if (!dataFetchInitiated && !dataRefreshing && !affiliateIsLoading) {
       if (user && user.affiliateCode) {
+        console.log("Initiating data fetch for affiliate:", user.affiliateCode);
         setDataFetchInitiated(true);
         setDataRefreshing(true);
         fetchCommissionData(selectedYear, selectedMonth, false)
+          .then(() => {
+            console.log("Commission data fetch completed successfully");
+          })
+          .catch((err) => {
+            console.error("Commission data fetch failed:", err);
+          })
           .finally(() => {
+            console.log("Commission data fetch finished, setting refreshing to false");
             setDataRefreshing(false);
           });
       } else if (user && !user.affiliateCode) {
+        console.log("User has no affiliate code:", user.email);
         toast.error("Affiliate code not found for your account. Please contact support.");
         setDataFetchInitiated(true);
       } else if (!user) {
+        console.log("No user found after auth loading completed");
         setDataFetchInitiated(true);
       }
+    } else {
+      console.log("Skipping data fetch - conditions not met:", {
+        dataFetchInitiated,
+        dataRefreshing,
+        affiliateIsLoading,
+        hasUser: !!user,
+        hasAffiliateCode: !!user?.affiliateCode
+      });
     }
   }, [
     authIsLoading,
@@ -65,12 +92,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (error) {
+      console.error("Affiliate context error:", error);
       toast.error(error);
     }
   }, [error]);
 
   const handleMonthChange = (year: number, month: number) => {
     if (year !== selectedYear || month !== selectedMonth) {
+      console.log("Month changed to:", year, month);
       setSelectedYear(year);
       setSelectedMonth(month);
       setDataFetchInitiated(false);
@@ -104,7 +133,16 @@ export default function Dashboard() {
   };
 
   const renderDashboardContent = () => {
+    console.log("Rendering dashboard content - conditions check:");
+    console.log("- authIsLoading:", authIsLoading);
+    console.log("- user exists:", !!user);
+    console.log("- user.affiliateCode:", user?.affiliateCode);
+    console.log("- isAdmin:", isAdmin);
+    console.log("- affiliateIsLoading:", affiliateIsLoading);
+    console.log("- summary exists:", !!summary);
+
     if (authIsLoading) {
+      console.log("Showing auth loading screen");
       return (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -114,6 +152,7 @@ export default function Dashboard() {
     }
 
     if (user && !user.affiliateCode && !isAdmin) {
+      console.log("Showing no affiliate code warning");
       return (
         <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
           <CardContent className="p-4">
@@ -129,6 +168,7 @@ export default function Dashboard() {
     }
     
     if (affiliateIsLoading && !summary) {
+      console.log("Showing affiliate data loading screen");
       return (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -138,9 +178,11 @@ export default function Dashboard() {
     }
 
     if (!user?.affiliateCode && !isAdmin) {
+      console.log("No user or affiliate code, returning null");
       return null;
     }
 
+    console.log("Rendering full dashboard content");
     return (
       <>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -233,6 +275,8 @@ export default function Dashboard() {
       </>
     );
   };
+
+  console.log("About to render dashboard layout");
 
   return (
     <div className="flex min-h-screen bg-background">
