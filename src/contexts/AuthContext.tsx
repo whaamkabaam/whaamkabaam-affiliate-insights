@@ -10,7 +10,6 @@ export interface UserWithRole extends User {
   name?: string;
 }
 
-// Updated the return type of login function to match what Supabase actually returns
 interface AuthContextType {
   user: UserWithRole | null;
   session: Session | null;
@@ -35,149 +34,109 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Function to fetch additional user data like role and affiliate code
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
-      console.log("Fetching additional user data for:", userId);
-      
-      // Check if user is admin using RPC function
-      const { data: roleData, error: roleError } = await supabase
-        .rpc('get_user_role', { user_id: userId });
+      console.log("AuthContext: Fetching additional user data for:", userId);
 
-      if (roleError) {
-        console.error("Error checking admin role:", roleError);
-      } else {
-        console.log("User role:", roleData);
-      }
-      
-      // Get affiliate code if exists using RPC function
-      const { data: affiliateData, error: affiliateError } = await supabase
-        .rpc('get_affiliate_data', { user_id: userId });
+      const [roleResult, affiliateResult, profileResult] = await Promise.all([
+        supabase.rpc('get_user_role', { user_id: userId }),
+        supabase.rpc('get_affiliate_data', { user_id: userId }),
+        supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()
+      ]);
 
-      if (affiliateError) {
-        console.error("Error fetching affiliate data:", affiliateError);
-      } else {
-        console.log("Affiliate data:", affiliateData);
-      }
+      const { data: roleData, error: roleError } = roleResult;
+      const { data: affiliateRpcData, error: affiliateError } = affiliateResult;
+      const { data: profileData, error: profileError } = profileResult;
 
-      // Get user profile for name from profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('full_name, display_name')
-        .eq('id', userId)
-        .maybeSingle();
+      if (roleError) console.error("AuthContext: Error checking admin role:", roleError);
+      if (affiliateError) console.error("AuthContext: Error fetching affiliate data from RPC:", affiliateError);
+      if (profileError) console.error("AuthContext: Error fetching profile data:", profileError);
 
-      if (profileError) {
-        console.error("Error fetching profile data:", profileError);
-      } else {
-        console.log("Profile data:", profileData);
+      console.log("AuthContext: User role data from RPC:", roleData);
+      console.log("AuthContext: Affiliate data from RPC:", affiliateRpcData);
+      console.log("AuthContext: Profile data from DB:", profileData);
+
+      let determinedAffiliateCode: string | undefined = currentUser.user_metadata?.affiliate_code;
+
+      if (!determinedAffiliateCode && affiliateRpcData && typeof affiliateRpcData === 'object' && 'affiliate_code' in affiliateRpcData && (affiliateRpcData as any).affiliate_code) {
+        determinedAffiliateCode = (affiliateRpcData as { affiliate_code: string }).affiliate_code;
+        console.log("AuthContext: Affiliate code from RPC:", determinedAffiliateCode);
       }
 
-      // Parse and extract data from the affiliateData JSON
-      let affiliateCode: string | undefined = undefined;
-      if (affiliateData && typeof affiliateData === 'object') {
-        // Handle the JSON object safely
-        const parsedData = affiliateData as unknown as AffiliateData;
-        affiliateCode = parsedData.affiliate_code;
-      }
-      
-      // Get user metadata directly from auth to check if affiliate_code is already there
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      let email: string | undefined = undefined;
-      let metadataAffiliateCode: string | undefined = undefined;
-      
-      if (!userError && userData?.user) {
-        email = userData.user.email;
-        metadataAffiliateCode = userData.user.user_metadata?.affiliate_code;
-      }
-      
-      // First check user_metadata for affiliate_code
-      if (metadataAffiliateCode) {
-        affiliateCode = metadataAffiliateCode;
-        console.log(`Found affiliate code '${affiliateCode}' in user metadata`);
-      }
-      
-      // If no affiliate code found yet, use the one from the database
-      if (!affiliateCode && email) {
-        if (email.toLowerCase() === 'nic@whaamkabaam.com') {
-          affiliateCode = 'nic';
-          console.log("Assigned default affiliate code 'nic' based on email");
-        } else if (email.toLowerCase() === 'maru@whaamkabaam.com') {
-          affiliateCode = 'maru';
-          console.log("Assigned default affiliate code 'maru' based on email");
+      if (!determinedAffiliateCode && currentUser.email) {
+        const emailLower = currentUser.email.toLowerCase();
+        if (emailLower === 'nic@whaamkabaam.com') {
+          determinedAffiliateCode = 'nic';
+          console.log("AuthContext: Assigned fallback affiliate code 'nic' based on email");
+        } else if (emailLower === 'maru@whaamkabaam.com') {
+          determinedAffiliateCode = 'maru';
+          console.log("AuthContext: Assigned fallback affiliate code 'maru' based on email");
         }
       }
-
-      // Update user with additional data
-      setUser(prevUser => {
-        if (!prevUser) return null;
-        
-        const updatedUser: UserWithRole = { 
-          ...prevUser,
-          role: roleData === 'admin' ? 'admin' : 'affiliate',
-          affiliateCode: affiliateCode,
-          name: profileData?.full_name || profileData?.display_name || prevUser.email?.split('@')[0] || undefined
-        };
-        
-        return updatedUser;
-      });
       
-      setIsAdmin(roleData === 'admin');
+      const finalUser: UserWithRole = {
+        ...currentUser,
+        role: roleData === 'admin' ? 'admin' : 'affiliate',
+        affiliateCode: determinedAffiliateCode,
+        name: profileData?.full_name || profileData?.display_name || currentUser.email?.split('@')[0] || undefined
+      };
+      
+      setIsAdmin(finalUser.role === 'admin');
+      console.log("AuthContext: Final user object prepared:", finalUser);
+      return finalUser;
+
     } catch (err) {
-      console.error("Error fetching user data:", err);
+      console.error("AuthContext: Error in fetchUserData:", err);
+      return { ...currentUser, role: 'affiliate', affiliateCode: currentUser.user_metadata?.affiliate_code, name: currentUser.email?.split('@')[0] };
     }
   };
 
   useEffect(() => {
-    console.log("Setting up auth state listener with session persistence");
-    
-    // Configure Supabase client for session persistence
-    supabase.auth.onAuthStateChange(
+    console.log("AuthContext: Setting up auth state listener.");
+    setIsLoading(true);
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log("Auth state changed, event:", event, "session exists:", !!newSession);
+        console.log("AuthContext: Auth state changed, event:", event, "session exists:", !!newSession);
         setSession(newSession);
-        
+
         if (newSession?.user) {
-          console.log("User in session:", newSession.user.email);
-          const extendedUser = newSession.user as UserWithRole;
-          setUser(extendedUser);
-          
-          // Use setTimeout to prevent Supabase authentication deadlocks
-          setTimeout(() => {
-            fetchUserData(newSession.user.id);
-          }, 0);
+          console.log("AuthContext: User in new session:", newSession.user.email);
+          const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
+          setUser(detailedUser);
         } else {
-          console.log("No user in session");
+          console.log("AuthContext: No user in new session.");
           setUser(null);
           setIsAdmin(false);
         }
-        
-        // Set loading to false after processing auth state
         setIsLoading(false);
       }
     );
 
-    // Check for existing session immediately
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      console.log("Checking for existing session", !!existingSession);
-      setSession(existingSession);
-      
+    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
+      console.log("AuthContext: Checking for existing session", !!existingSession);
       if (existingSession?.user) {
-        console.log("Found existing session for user:", existingSession.user.email);
-        const extendedUser = existingSession.user as UserWithRole;
-        setUser(extendedUser);
-        
-        setTimeout(() => {
-          fetchUserData(existingSession.user.id);
-        }, 0);
+        console.log("AuthContext: Found existing session for user:", existingSession.user.email);
+        if (!user || user.id !== existingSession.user.id) {
+          const detailedUser = await fetchUserData(existingSession.user.id, existingSession.user);
+          setUser(detailedUser);
+        }
+        setSession(existingSession);
       } else {
-        console.log("No existing session found");
+        console.log("AuthContext: No existing session found.");
+        setUser(null);
+        setIsAdmin(false);
       }
-      
       setIsLoading(false);
+    }).catch((err) => {
+        console.error("AuthContext: Error getting session:", err);
+        setIsLoading(false);
     });
 
-    // No cleanup needed for onAuthStateChange as it handles its own subscription
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      console.log("AuthContext: Unsubscribed from auth state changes.");
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -185,43 +144,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      console.log(`Attempting to sign in with email: ${email}`);
+      console.log(`AuthContext: Attempting to sign in with email: ${email}`);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (error) {
-        console.error("Login error:", error);
-        setError(error.message || "Login failed");
-        throw error;
+      if (signInError) {
+        console.error("AuthContext: Login error:", signInError);
+        setError(signInError.message || "Login failed");
+        throw signInError;
       }
       
-      console.log("Login successful:", data);
-      return data;
+      console.log("AuthContext: Login successful, data object:", data);
+      return { user: data.user, session: data.session, weakPassword: (data as any).weakPassword };
+
     } catch (err: any) {
-      console.error("Login exception:", err);
-      
-      // Try to initialize users automatically if login fails
+      console.error("AuthContext: Login exception:", err);
       if (email === "admin@whaamkabaam.com" && password === "AdminTest123") {
         try {
-          console.log("Attempting to initialize users via edge function...");
+          console.log("AuthContext: Attempting to initialize users via edge function due to admin login fail...");
           const { data: initData, error: initError } = await supabase.functions.invoke<any>("setup-initial-users");
           
-          if (initError) {
-            console.error("Error initializing users:", initError);
-          } else if (initData) {
-            console.log("Users initialized:", initData);
-            toast.info("Created test users. Please try logging in again.");
-            setError("Users initialized. Please try logging in again.");
-            throw new Error("Users initialized. Please try logging in again.");
+          if (initError) console.error("AuthContext: Error initializing users:", initError);
+          else if (initData) {
+            console.log("AuthContext: Users initialized:", initData);
+            toast.info("Test users may have been (re)initialized. Please try logging in again.");
           }
         } catch (initErr) {
-          console.error("Error during user initialization:", initErr);
+          console.error("AuthContext: Error during user initialization call:", initErr);
         }
       }
-      
       setError(err.message || "Login failed");
       throw err;
     } finally {
@@ -237,7 +187,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAdmin(false);
       toast.success("Successfully logged out");
     } catch (err: any) {
-      console.error("Logout error:", err.message);
+      console.error("AuthContext: Logout error:", err.message);
       toast.error("Failed to log out");
     }
   };
@@ -249,7 +199,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     error,
     login,
     logout,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user && !!session,
     isAdmin
   };
 

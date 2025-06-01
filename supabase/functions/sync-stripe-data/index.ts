@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -41,7 +40,6 @@ serve(async (req) => {
     let shouldSync = forceRefresh;
     
     if (!shouldSync) {
-      // Check when we last synced this period
       const { data: lastSync } = await supabaseClient
         .from('system_settings')
         .select('value, updated_at')
@@ -54,7 +52,7 @@ serve(async (req) => {
       } else {
         const lastSyncTime = new Date(lastSync.updated_at);
         const hoursSinceSync = (Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60);
-        shouldSync = hoursSinceSync > 1; // Sync if more than 1 hour old
+        shouldSync = hoursSinceSync > 1;
         console.log(`Last sync: ${lastSyncTime.toISOString()}, hours ago: ${hoursSinceSync.toFixed(2)}`);
       }
     }
@@ -72,22 +70,25 @@ serve(async (req) => {
 
     console.log("Starting Stripe data sync...");
 
-    // Get affiliate mapping from database
+    // Get affiliate mapping from database including commission rates
     const { data: affiliates, error: affiliateError } = await supabaseClient
       .from('affiliates')
-      .select('affiliate_code, stripe_promotion_code_id');
+      .select('affiliate_code, stripe_promotion_code_id, commission_rate');
 
     if (affiliateError) {
       console.error("Error fetching affiliates:", affiliateError);
       throw affiliateError;
     }
 
-    // Create mapping from Stripe promotion code to internal affiliate code
-    const stripeToAffiliateMap: Record<string, string> = {};
+    // Create mapping from Stripe promotion code to internal affiliate data
+    const stripeToAffiliateMap: Record<string, { code: string; rate: number }> = {};
     if (affiliates) {
       for (const affiliate of affiliates) {
         if (affiliate.stripe_promotion_code_id) {
-          stripeToAffiliateMap[affiliate.stripe_promotion_code_id] = affiliate.affiliate_code;
+          stripeToAffiliateMap[affiliate.stripe_promotion_code_id] = {
+            code: affiliate.affiliate_code,
+            rate: Number(affiliate.commission_rate) || 0.1
+          };
         }
       }
     }
@@ -142,11 +143,10 @@ serve(async (req) => {
       try {
         // Check if session has affiliate discount
         let stripePromotionCodeId = null;
-        let affiliateCode = null;
+        let affiliateData = null;
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
-            // Try to get promotion code from different possible fields
             if (discount.promotion_code) {
               stripePromotionCodeId = discount.promotion_code;
               break;
@@ -162,19 +162,21 @@ serve(async (req) => {
           continue;
         }
 
-        // Map Stripe promotion code to internal affiliate code
-        affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
+        // Map Stripe promotion code to internal affiliate data
+        affiliateData = stripeToAffiliateMap[stripePromotionCodeId];
         
-        if (!affiliateCode) {
+        if (!affiliateData) {
           console.log(`No affiliate mapping found for Stripe promotion code: ${stripePromotionCodeId}`);
           continue;
         }
 
-        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId})`);
+        console.log(`Found affiliate session: ${session.id} -> ${affiliateData.code} (${stripePromotionCodeId})`);
 
-        // Calculate commission (10% of amount paid)
-        const amountPaid = (session.amount_total || 0) / 100; // Convert cents to dollars
-        const affiliateCommission = amountPaid * 0.10;
+        // Calculate commission using the affiliate's specific rate
+        const amountPaid = (session.amount_total || 0) / 100;
+        const affiliateCommission = amountPaid * affiliateData.rate;
+        
+        console.log(`Calculated commission for ${affiliateData.code}: ${amountPaid} * ${affiliateData.rate} = ${affiliateCommission}`);
 
         const record = {
           session_id: session.id,
@@ -182,8 +184,8 @@ serve(async (req) => {
           customer_email: session.customer_details?.email || null,
           amount_paid: amountPaid,
           affiliate_commission: affiliateCommission,
-          promo_code_name: affiliateCode, // Store internal affiliate code
-          promo_code_id: stripePromotionCodeId, // Store Stripe promotion code ID
+          promo_code_name: affiliateData.code,
+          promo_code_id: stripePromotionCodeId,
           product_id: session.line_items?.data?.[0]?.price?.product || null,
           product_name: session.line_items?.data?.[0]?.description || null,
           created_at: new Date(session.created * 1000).toISOString(),
