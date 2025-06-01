@@ -72,8 +72,30 @@ serve(async (req) => {
 
     console.log("Starting Stripe data sync...");
 
+    // Get affiliate mapping from database
+    const { data: affiliates, error: affiliateError } = await supabaseClient
+      .from('affiliates')
+      .select('affiliate_code, stripe_promotion_code_id');
+
+    if (affiliateError) {
+      console.error("Error fetching affiliates:", affiliateError);
+      throw affiliateError;
+    }
+
+    // Create mapping from Stripe promotion code to internal affiliate code
+    const stripeToAffiliateMap: Record<string, string> = {};
+    if (affiliates) {
+      for (const affiliate of affiliates) {
+        if (affiliate.stripe_promotion_code_id) {
+          stripeToAffiliateMap[affiliate.stripe_promotion_code_id] = affiliate.affiliate_code;
+        }
+      }
+    }
+
+    console.log("Affiliate mapping:", stripeToAffiliateMap);
+
     // Fetch checkout sessions from Stripe with date filtering
-    const stripeUrl = `https://api.stripe.com/v1/checkout/sessions?created[gte]=${startTimestamp}&created[lte]=${endTimestamp}&expand[]=data.discounts&limit=100`;
+    const stripeUrl = `https://api.stripe.com/v1/checkout/sessions?created[gte]=${startTimestamp}&created[lte]=${endTimestamp}&expand[]=data.discounts&expand[]=data.line_items&limit=100`;
     
     let allSessions = [];
     let hasMore = true;
@@ -119,21 +141,36 @@ serve(async (req) => {
     for (const session of allSessions) {
       try {
         // Check if session has affiliate discount
-        let promoCodeName = null;
+        let stripePromotionCodeId = null;
+        let affiliateCode = null;
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
-            if (discount.coupon && discount.coupon.id) {
-              promoCodeName = discount.coupon.id;
+            // Try to get promotion code from different possible fields
+            if (discount.promotion_code) {
+              stripePromotionCodeId = discount.promotion_code;
+              break;
+            } else if (discount.coupon && discount.coupon.id) {
+              stripePromotionCodeId = discount.coupon.id;
               break;
             }
           }
         }
 
         // Skip sessions without promo codes
-        if (!promoCodeName) {
+        if (!stripePromotionCodeId) {
           continue;
         }
+
+        // Map Stripe promotion code to internal affiliate code
+        affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
+        
+        if (!affiliateCode) {
+          console.log(`No affiliate mapping found for Stripe promotion code: ${stripePromotionCodeId}`);
+          continue;
+        }
+
+        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId})`);
 
         // Calculate commission (10% of amount paid)
         const amountPaid = (session.amount_total || 0) / 100; // Convert cents to dollars
@@ -145,8 +182,8 @@ serve(async (req) => {
           customer_email: session.customer_details?.email || null,
           amount_paid: amountPaid,
           affiliate_commission: affiliateCommission,
-          promo_code_name: promoCodeName,
-          promo_code_id: promoCodeName,
+          promo_code_name: affiliateCode, // Store internal affiliate code
+          promo_code_id: stripePromotionCodeId, // Store Stripe promotion code ID
           product_id: session.line_items?.data?.[0]?.price?.product || null,
           product_name: session.line_items?.data?.[0]?.description || null,
           created_at: new Date(session.created * 1000).toISOString(),

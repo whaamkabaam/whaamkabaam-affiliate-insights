@@ -68,6 +68,7 @@ serve(async (req) => {
     console.log(`Fetching data for ${affiliateCode} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // Query the promo_code_sales table for affiliate commission data
+    // Now using the internal affiliate code stored in promo_code_name
     const { data, error } = await supabaseClient
       .from('promo_code_sales')
       .select('*')
@@ -91,6 +92,8 @@ serve(async (req) => {
 
     // Process sales data
     if (data && data.length > 0) {
+      console.log(`Found ${data.length} commission records for ${affiliateCode}`);
+      
       for (const sale of data) {
         if (sale.customer_email) {
           customerEmails.add(sale.customer_email);
@@ -112,9 +115,12 @@ serve(async (req) => {
           productId: sale.product_id
         });
       }
+    } else {
+      console.log(`No commission records found for ${affiliateCode} in ${year}-${month}`);
     }
 
     console.log(`Returning ${commissions.length} commissions for ${affiliateCode}`);
+    console.log(`Total revenue: $${totalRevenue}, Total commission: $${totalCommission}, Customers: ${customerEmails.size}`);
     
     // Return compiled data
     return new Response(

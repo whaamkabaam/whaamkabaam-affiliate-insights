@@ -15,6 +15,7 @@ export type Database = {
           commission_rate: number
           created_at: string | null
           id: string
+          stripe_promotion_code_id: string | null
           user_id: string
         }
         Insert: {
@@ -22,6 +23,7 @@ export type Database = {
           commission_rate?: number
           created_at?: string | null
           id?: string
+          stripe_promotion_code_id?: string | null
           user_id: string
         }
         Update: {
@@ -29,6 +31,7 @@ export type Database = {
           commission_rate?: number
           created_at?: string | null
           id?: string
+          stripe_promotion_code_id?: string | null
           user_id?: string
         }
         Relationships: []
