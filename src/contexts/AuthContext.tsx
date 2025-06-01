@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.log("AuthContext: Starting role promise...");
         roleResult = await withTimeout(
-          supabase.rpc('get_user_role', { user_id: userId }).then(result => result),
+          Promise.resolve(supabase.rpc('get_user_role', { user_id: userId })),
           10000,
           'get_user_role'
         );
@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.log("AuthContext: Starting affiliate promise...");
         affiliateResult = await withTimeout(
-          supabase.rpc('get_affiliate_data', { p_user_id: userId }).then(result => result),
+          Promise.resolve(supabase.rpc('get_affiliate_data', { p_user_id: userId })),
           10000,
           'get_affiliate_data'
         );
@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.log("AuthContext: Starting profile promise...");
         profileResult = await withTimeout(
-          supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle().then(result => result),
+          Promise.resolve(supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()),
           10000,
           'profiles_query'
         );
