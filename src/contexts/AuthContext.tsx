@@ -35,150 +35,141 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Function to fetch additional user data like role and affiliate code
-  const fetchUserData = async (userId: string) => {
+  // Replace the existing fetchUserData function with this one:
+  const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
-      console.log("Fetching additional user data for:", userId);
-      
-      // Check if user is admin using RPC function
-      const { data: roleData, error: roleError } = await supabase
-        .rpc('get_user_role', { user_id: userId });
+      console.log("AuthContext: Fetching additional user data for:", userId);
 
-      if (roleError) {
-        console.error("Error checking admin role:", roleError);
-      } else {
-        console.log("User role:", roleData);
-      }
-      
-      // Get affiliate code if exists using RPC function
-      const { data: affiliateData, error: affiliateError } = await supabase
-        .rpc('get_affiliate_data', { user_id: userId });
+      // Perform all data fetching operations concurrently
+      const [roleResult, affiliateResult, profileResult] = await Promise.all([
+        supabase.rpc('get_user_role', { user_id: userId }),
+        supabase.rpc('get_affiliate_data', { user_id: userId }), // This RPC returns affiliate_code and commission_rate
+        supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle()
+      ]);
 
-      if (affiliateError) {
-        console.error("Error fetching affiliate data:", affiliateError);
-      } else {
-        console.log("Affiliate data:", affiliateData);
-      }
+      const { data: roleData, error: roleError } = roleResult;
+      // Expect affiliateResult.data to be an object like { affiliate_code: 'xxx', commission_rate: 0.1 } or null
+      const { data: affiliateRpcData, error: affiliateError } = affiliateResult;
+      const { data: profileData, error: profileError } = profileResult;
 
-      // Get user profile for name from profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('full_name, display_name')
-        .eq('id', userId)
-        .maybeSingle();
+      // Log any errors encountered during fetching
+      if (roleError) console.error("AuthContext: Error checking admin role:", roleError.message);
+      if (affiliateError) console.error("AuthContext: Error fetching affiliate data from RPC:", affiliateError.message);
+      if (profileError) console.error("AuthContext: Error fetching profile data:", profileError.message);
 
-      if (profileError) {
-        console.error("Error fetching profile data:", profileError);
-      } else {
-        console.log("Profile data:", profileData);
-      }
+      console.log("AuthContext: User role data from RPC:", roleData);
+      console.log("AuthContext: Affiliate data from RPC (get_affiliate_data):", affiliateRpcData);
+      console.log("AuthContext: Profile data from DB:", profileData);
 
-      // Parse and extract data from the affiliateData JSON
-      let affiliateCode: string | undefined = undefined;
-      if (affiliateData && typeof affiliateData === 'object') {
-        // Handle the JSON object safely
-        const parsedData = affiliateData as unknown as AffiliateData;
-        affiliateCode = parsedData.affiliate_code;
-      }
-      
-      // Get user metadata directly from auth to check if affiliate_code is already there
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      let email: string | undefined = undefined;
-      let metadataAffiliateCode: string | undefined = undefined;
-      
-      if (!userError && userData?.user) {
-        email = userData.user.email;
-        metadataAffiliateCode = userData.user.user_metadata?.affiliate_code;
-      }
-      
-      // First check user_metadata for affiliate_code
-      if (metadataAffiliateCode) {
-        affiliateCode = metadataAffiliateCode;
-        console.log(`Found affiliate code '${affiliateCode}' in user metadata`);
-      }
-      
-      // If no affiliate code found yet, use the one from the database
-      if (!affiliateCode && email) {
-        if (email.toLowerCase() === 'nic@whaamkabaam.com') {
-          affiliateCode = 'nic';
-          console.log("Assigned default affiliate code 'nic' based on email");
-        } else if (email.toLowerCase() === 'maru@whaamkabaam.com') {
-          affiliateCode = 'maru';
-          console.log("Assigned default affiliate code 'maru' based on email");
+      let determinedAffiliateCode: string | undefined = currentUser.user_metadata?.affiliate_code;
+
+      // Try to get affiliate_code from the RPC call's result
+      if (!determinedAffiliateCode && affiliateRpcData && typeof affiliateRpcData === 'object' && 'affiliate_code' in affiliateRpcData) {
+        const rpcAffiliateCode = (affiliateRpcData as { affiliate_code?: string }).affiliate_code;
+        if (rpcAffiliateCode) {
+          determinedAffiliateCode = rpcAffiliateCode;
+          console.log("AuthContext: Affiliate code from RPC (get_affiliate_data):", determinedAffiliateCode);
         }
       }
 
-      // Update user with additional data
-      setUser(prevUser => {
-        if (!prevUser) return null;
-        
-        const updatedUser: UserWithRole = { 
-          ...prevUser,
-          role: roleData === 'admin' ? 'admin' : 'affiliate',
-          affiliateCode: affiliateCode,
-          name: profileData?.full_name || profileData?.display_name || prevUser.email?.split('@')[0] || undefined
-        };
-        
-        return updatedUser;
-      });
+      // Fallback logic if no affiliate code is found yet (important for Maru as per logs)
+      if (!determinedAffiliateCode && currentUser.email) {
+        const emailLower = currentUser.email.toLowerCase();
+        if (emailLower === 'nic@whaamkabaam.com') {
+          determinedAffiliateCode = 'nic';
+          console.log("AuthContext: Assigned FALLBACK affiliate code 'nic' based on email");
+        } else if (emailLower === 'maru@whaamkabaam.com') {
+          determinedAffiliateCode = 'maru';
+          console.log("AuthContext: Assigned FALLBACK affiliate code 'maru' based on email");
+        }
+        // Add other fallbacks if necessary, e.g. for 'ayoub' if his RPC also fails
+        // else if (emailLower === 'ayoub@whaamkabaam.com') {
+        //   determinedAffiliateCode = 'ayoub';
+        //   console.log("AuthContext: Assigned FALLBACK affiliate code 'ayoub' based on email");
+        // }
+      }
       
-      setIsAdmin(roleData === 'admin');
-    } catch (err) {
-      console.error("Error fetching user data:", err);
+      const finalUser: UserWithRole = {
+        ...currentUser,
+        role: roleData === 'admin' ? 'admin' : 'affiliate',
+        affiliateCode: determinedAffiliateCode,
+        name: profileData?.full_name || profileData?.display_name || currentUser.email?.split('@')[0] || "User"
+      };
+      
+      console.log("AuthContext: Final user object prepared:", finalUser);
+      return finalUser;
+
+    } catch (err: any) {
+      console.error("AuthContext: Critical error in fetchUserData for user ID " + userId + ":", err.message);
+      // Fallback to a minimal user object in case of unexpected errors
+      return { 
+          ...currentUser, 
+          role: 'affiliate', // Default role
+          affiliateCode: currentUser.user_metadata?.affiliate_code, 
+          name: currentUser.email?.split('@')[0] || "User"
+      };
     }
   };
 
+  // Replace your main useEffect for auth state changes and session loading with this:
   useEffect(() => {
-    console.log("Setting up auth state listener with session persistence");
-    
-    // Configure Supabase client for session persistence
-    supabase.auth.onAuthStateChange(
+    console.log("AuthContext: Initializing auth state listener and session check.");
+    setIsLoading(true); // Start with loading true
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log("Auth state changed, event:", event, "session exists:", !!newSession);
-        setSession(newSession);
-        
+        console.log("AuthContext: Auth state changed. Event:", event, "Session exists:", !!newSession);
+        setSession(newSession); // Update session state regardless
+
         if (newSession?.user) {
-          console.log("User in session:", newSession.user.email);
-          const extendedUser = newSession.user as UserWithRole;
-          setUser(extendedUser);
-          
-          // Use setTimeout to prevent Supabase authentication deadlocks
-          setTimeout(() => {
-            fetchUserData(newSession.user.id);
-          }, 0);
+          console.log("AuthContext: User found in new/changed session:", newSession.user.email);
+          const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
+          setUser(detailedUser);
+          setIsAdmin(detailedUser.role === 'admin'); // Set isAdmin based on fetched data
         } else {
-          console.log("No user in session");
+          console.log("AuthContext: No user in new/changed session. Clearing user state.");
           setUser(null);
           setIsAdmin(false);
         }
-        
-        // Set loading to false after processing auth state
-        setIsLoading(false);
+        setIsLoading(false); // Finish loading after processing
       }
     );
 
-    // Check for existing session immediately
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      console.log("Checking for existing session", !!existingSession);
-      setSession(existingSession);
-      
-      if (existingSession?.user) {
-        console.log("Found existing session for user:", existingSession.user.email);
-        const extendedUser = existingSession.user as UserWithRole;
-        setUser(extendedUser);
-        
-        setTimeout(() => {
-          fetchUserData(existingSession.user.id);
-        }, 0);
-      } else {
-        console.log("No existing session found");
+    // Initial session check
+    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
+      console.log("AuthContext: Initial getSession complete. Session exists:", !!existingSession);
+      // No need to set session again if onAuthStateChange already handled it, but good for initial load
+      if (existingSession) {
+          setSession(existingSession); // Set session if found
+          if (existingSession.user) {
+              console.log("AuthContext: User found in existing session:", existingSession.user.email);
+               // Only set user if not already set by onAuthStateChange or if different user
+              if (!user || user.id !== existingSession.user.id) {
+                  const detailedUser = await fetchUserData(existingSession.user.id, existingSession.user);
+                  setUser(detailedUser);
+                  setIsAdmin(detailedUser.role === 'admin');
+              }
+          } else { // existingSession but no user object
+              setUser(null);
+              setIsAdmin(false);
+          }
+      } else { // No existing session
+        setUser(null);
+        setIsAdmin(false);
       }
-      
-      setIsLoading(false);
+      setIsLoading(false); // Finish loading after initial check
+    }).catch((err) => {
+        console.error("AuthContext: Error during initial getSession:", err);
+        setIsLoading(false); // Ensure loading is false on error too
     });
 
-    // No cleanup needed for onAuthStateChange as it handles its own subscription
-  }, []);
+    return () => {
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+        console.log("AuthContext: Unsubscribed from auth state changes.");
+      }
+    };
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
