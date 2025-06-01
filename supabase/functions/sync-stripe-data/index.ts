@@ -21,7 +21,7 @@ interface SystemSettings {
   timestamp: string;
 }
 
-interface PromoCodeSale {
+interface AffiliateCommission {
   session_id: string;
   payment_intent_id: string | null;
   customer_email: string | null;
@@ -37,7 +37,7 @@ interface PromoCodeSale {
 
 // Main handler
 serve(async (req: Request) => {
-  // IMPORTANT: Handle CORS preflight requests FIRST - before any other processing
+  // Handle CORS preflight requests FIRST
   if (req.method === 'OPTIONS') {
     console.log("Handling OPTIONS preflight request");
     return new Response(null, { 
@@ -77,7 +77,6 @@ serve(async (req: Request) => {
       console.log("Request options:", options);
     } catch (error) {
       console.log("Failed to parse request body, using default options");
-      // If body parsing fails, default options are fine
     }
     
     // Function to map promo code to affiliate code
@@ -119,15 +118,14 @@ serve(async (req: Request) => {
       return null;
     }
 
-    // Function to process a Stripe checkout session
-    async function processCheckoutSession(session: any): Promise<PromoCodeSale | null> {
+    // Function to process a Stripe checkout session and return commission data only
+    async function processCheckoutSession(session: any): Promise<AffiliateCommission | null> {
       try {
         // Only process paid sessions
         if (session.payment_status !== 'paid') {
           return null;
         }
         
-        // Use the expanded data directly instead of making separate API calls
         let productId = null;
         let productName = null;
         
@@ -149,13 +147,11 @@ serve(async (req: Request) => {
         if (session.total_details?.breakdown?.discounts && 
             session.total_details.breakdown.discounts.length > 0) {
           
-          // Get the promotion code from expanded data
           const discount = session.total_details.breakdown.discounts[0];
           if (discount.discount) {
             promoCodeId = discount.discount.promotion_code || discount.discount.id;
             
             if (discount.discount.promotion_code) {
-              // Get promo code from expanded data if available
               promoCodeName = discount.discount.code;
             }
             
@@ -170,15 +166,16 @@ serve(async (req: Request) => {
           }
         }
         
-        // Calculate affiliate commission (if applicable)
-        let affiliateCommission = null;
-        if (affiliateCode && affiliateRate > 0) {
-          // Divide by 100 because Stripe amount is in cents
-          affiliateCommission = (session.amount_total / 100) * affiliateRate;
+        // Only return commission data if there's an affiliate involved
+        if (!affiliateCode || affiliateRate <= 0) {
+          return null;
         }
         
-        // Create the record
-        const saleRecord: PromoCodeSale = {
+        // Calculate affiliate commission
+        const affiliateCommission = (session.amount_total / 100) * affiliateRate;
+        
+        // Create the commission record
+        const commissionRecord: AffiliateCommission = {
           session_id: session.id,
           payment_intent_id: session.payment_intent || null,
           customer_email: session.customer_details?.email || null,
@@ -192,7 +189,7 @@ serve(async (req: Request) => {
           refreshed_at: new Date().toISOString()
         };
         
-        return saleRecord;
+        return commissionRecord;
       } catch (error) {
         console.error(`Error processing session ${session.id}: ${error}`);
         return null;
@@ -236,8 +233,6 @@ serve(async (req: Request) => {
     
     // Function to update progress
     async function updateProgress(progress: number): Promise<void> {
-      // Send progress update through SSE if supported
-      // For now, we'll just store it in the database
       try {
         const { error } = await supabase
           .from('system_settings')
@@ -291,8 +286,7 @@ serve(async (req: Request) => {
       let startingAfter = null;
       
       while (hasMore) {
-        // Important: Update bookmark before processing any data
-        // This ensures that even if the function times out, we don't start from the beginning
+        // Update bookmark before processing any data
         await updateLastRefreshTimestamp();
         
         const queryParams: any = {
@@ -326,8 +320,8 @@ serve(async (req: Request) => {
         
         console.log(`Retrieved ${sessions.data.length} sessions, estimated total: ${totalEstimated}`);
         
-        // Collect records for batch processing
-        const batch: PromoCodeSale[] = [];
+        // Collect commission records for batch processing
+        const commissionBatch: AffiliateCommission[] = [];
         
         // Process each session
         for (const session of sessions.data) {
@@ -335,11 +329,11 @@ serve(async (req: Request) => {
           
           try {
             // Process the session with expanded data
-            const saleRecord = await processCheckoutSession(session);
+            const commissionRecord = await processCheckoutSession(session);
             
-            if (saleRecord) {
+            if (commissionRecord) {
               // Add to batch instead of individual upsert
-              batch.push(saleRecord);
+              commissionBatch.push(commissionRecord);
               saved++;
             } else {
               skipped++;
@@ -356,20 +350,20 @@ serve(async (req: Request) => {
           }
         }
         
-        // Batch upsert all processed records
-        if (batch.length > 0) {
+        // Batch upsert only commission records
+        if (commissionBatch.length > 0) {
           const { error } = await supabase
             .from('promo_code_sales')
-            .upsert(batch, { 
+            .upsert(commissionBatch, { 
               onConflict: 'session_id',
               ignoreDuplicates: false 
             });
           
           if (error) {
-            console.error(`Error batch upserting ${batch.length} records: ${error.message}`);
-            errors += batch.length;
+            console.error(`Error batch upserting ${commissionBatch.length} commission records: ${error.message}`);
+            errors += commissionBatch.length;
             // Adjust the saved count to account for failed saves
-            saved -= batch.length;
+            saved -= commissionBatch.length;
           }
         }
         
@@ -377,8 +371,7 @@ serve(async (req: Request) => {
         if (sessions.has_more && sessions.data.length > 0) {
           startingAfter = sessions.data[sessions.data.length - 1].id;
           
-          // Store this as our latest checkpoint so we don't have to start over
-          // if the process is interrupted
+          // Store this as our latest checkpoint
           const checkpointSession = sessions.data[sessions.data.length - 1];
           if (checkpointSession?.created) {
             await supabase
@@ -406,7 +399,7 @@ serve(async (req: Request) => {
       await updateLastRefreshTimestamp();
       await updateProgress(100);
       
-      console.log(`Sync complete: processed ${processed}, saved ${saved}, skipped ${skipped}, errors ${errors}`);
+      console.log(`Sync complete: processed ${processed}, saved ${saved} commission records, skipped ${skipped}, errors ${errors}`);
       
       // Return summary with CORS headers
       return new Response(JSON.stringify({
