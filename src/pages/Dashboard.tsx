@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,8 +17,9 @@ import { useNavigate } from "react-router-dom";
 export default function Dashboard() {
   const { user, isAdmin, isLoading: authIsLoading } = useAuth();
   const { fetchCommissionData, summary, isLoading: affiliateIsLoading, error } = useAffiliate();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  // Default to "all time" view (year 0, month 0)
+  const [selectedYear, setSelectedYear] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState(0);
   const [dataRefreshing, setDataRefreshing] = useState(false);
   const [initialDataFetched, setInitialDataFetched] = useState(false);
   const navigate = useNavigate();
@@ -85,15 +87,6 @@ export default function Dashboard() {
     }
   }, [error]);
 
-  const handleCopyLink = () => {
-    if (user?.affiliateCode) {
-      const url = `https://whaamkabaam.com/?ref=${user.affiliateCode}`;
-      navigator.clipboard.writeText(url)
-        .then(() => toast.success("Affiliate link copied to clipboard"))
-        .catch(() => toast.error("Failed to copy link"));
-    }
-  };
-
   const handleRefresh = async () => {
     if (!dataRefreshing && user?.affiliateCode) {
       setDataRefreshing(true);
@@ -109,6 +102,13 @@ export default function Dashboard() {
         setDataRefreshing(false);
       }
     }
+  };
+
+  const getDateRangeDescription = () => {
+    if (selectedYear === 0 && selectedMonth === 0) {
+      return "All time";
+    }
+    return new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
   const renderDashboardContent = () => {
@@ -163,19 +163,13 @@ export default function Dashboard() {
     console.log("Rendering full dashboard content");
     return (
       <>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <StatsCard
             title="Total Commission"
             value={`$${summary.totalCommission.toFixed(2)}`}
-            description={`For ${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`}
+            description={getDateRangeDescription()}
             icon={<DollarSign className="w-4 h-4" />}
             className="bg-primary/5"
-          />
-          <StatsCard
-            title="Total Revenue"
-            value={`$${summary.totalRevenue.toFixed(2)}`}
-            description="Generated through your affiliate link"
-            icon={<TrendingUp className="w-4 h-4" />}
           />
           <StatsCard
             title="New Customers"
@@ -192,30 +186,7 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="md:col-span-3">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle>Your Affiliate Link</CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleCopyLink}
-                disabled={!user?.affiliateCode}
-              >
-                Copy
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted p-3 rounded-md overflow-x-auto">
-                <code className="text-sm">
-                  {user?.affiliateCode 
-                    ? `https://whaamkabaam.com/?ref=${user.affiliateCode}`
-                    : "No affiliate code available."}
-                </code>
-              </div>
-            </CardContent>
-          </Card>
-          
+        <div className="grid gap-4">
           <MonthlyCommissionChart />
         </div>
         

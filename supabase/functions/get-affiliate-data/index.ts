@@ -46,35 +46,33 @@ serve(async (req) => {
       );
     }
 
-    if (!year || !month) {
-      console.error("Missing year or month parameter");
-      return new Response(
-        JSON.stringify({ error: "Missing year or month parameter" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-      );
-    }
-
     // Create Supabase client using service role key for database operations
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Calculate start and end date timestamps for the given year and month
-    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate(); // Get last day of month
-    const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59);
-    
-    console.log(`Fetching data for ${affiliateCode} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
-
-    // Query the promo_code_sales table for affiliate commission data
-    // Now using the internal affiliate code stored in promo_code_name
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from('promo_code_sales')
       .select('*')
-      .eq('promo_code_name', affiliateCode)
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString());
+      .eq('promo_code_name', affiliateCode);
+
+    // If year and month are provided and not 0 (all-time), filter by date range
+    if (year && month && year !== 0 && month !== 0) {
+      const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = new Date(parseInt(year), parseInt(month) - 1, lastDay, 23, 59, 59);
+      
+      console.log(`Fetching data for ${affiliateCode} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      
+      query = query
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+    } else {
+      console.log(`Fetching all-time data for ${affiliateCode}`);
+    }
+
+    const { data, error } = await query;
     
     if (error) {
       console.error("Error fetching sales data:", error);
@@ -116,7 +114,8 @@ serve(async (req) => {
         });
       }
     } else {
-      console.log(`No commission records found for ${affiliateCode} in ${year}-${month}`);
+      const timeRange = (year && month && year !== 0 && month !== 0) ? `in ${year}-${month}` : 'for all time';
+      console.log(`No commission records found for ${affiliateCode} ${timeRange}`);
     }
 
     console.log(`Returning ${commissions.length} commissions for ${affiliateCode}`);

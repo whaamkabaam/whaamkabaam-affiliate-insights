@@ -65,9 +65,9 @@ export function CommissionTable({ limit }: CommissionTableProps) {
 
   const formatProductName = (productId: string) => {
     const products: Record<string, string> = {
-      "prod_RINKAvP3L2kZeV": "Basic Membership",
-      "prod_RINJvQw1Qw1Qw1Q": "Premium Membership",
-      "prod_RINO6yE0y4O9gX": "Enterprise Membership",
+      "prod_RINO6yE0y4O9gX": "Live Custom Curve Settings",
+      "prod_RINKAvP3L2kZeV": "Premium Personalized Custom Curve Settings",
+      "prod_RINJvQw1Qw1Qw1Q": "Enterprise Membership",
     };
     
     return products[productId] || productId;
@@ -114,7 +114,6 @@ export function CommissionTable({ limit }: CommissionTableProps) {
             <TableHead>Date</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Product</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
             <TableHead className="text-right">Commission</TableHead>
           </TableRow>
         </TableHeader>
@@ -126,7 +125,6 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                 {formatCustomerName(commission.customerEmail)}
               </TableCell>
               <TableCell>{formatProductName(commission.productId)}</TableCell>
-              <TableCell className="text-right">${commission.amount.toFixed(2)}</TableCell>
               <TableCell className="text-right font-medium text-primary">
                 ${commission.commission.toFixed(2)}
               </TableCell>

@@ -52,12 +52,16 @@ export function MonthlyCommissionChart() {
           const endDate = new Date(currentYear, month, 0, 23, 59, 59).toISOString();
           
           // Query database directly for this affiliate's commission total for this month
+          // Filter out hardcoded examples in the query
           const { data: monthlyData, error: queryError } = await supabase
             .from('promo_code_sales')
-            .select('affiliate_commission')
+            .select('affiliate_commission, customer_email')
             .eq('promo_code_name', user.affiliateCode)
             .gte('created_at', startDate)
-            .lte('created_at', endDate);
+            .lte('created_at', endDate)
+            .not('customer_email', 'like', '%unknown@example.com%')
+            .not('customer_email', 'like', '%example.com%')
+            .neq('customer_email', 'unknown@example.com');
           
           if (queryError) {
             console.error(`Error fetching chart data for ${currentYear}-${month}:`, queryError);
@@ -68,9 +72,16 @@ export function MonthlyCommissionChart() {
             continue;
           }
           
-          // Calculate total commission for this month
+          // Calculate total commission for this month from real customers only
           const totalCommission = monthlyData?.reduce((sum, record) => {
-            return sum + (Number(record.affiliate_commission) || 0);
+            // Double check to filter out any remaining example data
+            if (record.customer_email && 
+                !record.customer_email.includes('unknown@example.com') &&
+                !record.customer_email.includes('example.com') &&
+                record.customer_email !== 'unknown@example.com') {
+              return sum + (Number(record.affiliate_commission) || 0);
+            }
+            return sum;
           }, 0) || 0;
           
           if (isMounted) {
