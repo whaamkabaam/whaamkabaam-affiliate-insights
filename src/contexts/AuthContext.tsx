@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -52,14 +53,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Perform all data fetching operations concurrently with timeout
       console.log("AuthContext: Making concurrent RPC calls...");
       
-      // Create the actual promises from Supabase builders
-      const roleQuery = supabase.rpc('get_user_role', { user_id: userId });
-      const affiliateQuery = supabase.rpc('get_affiliate_data', { p_user_id: userId });
-      const profileQuery = supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle();
+      // Convert Supabase builders to promises by calling them
+      const rolePromise = withTimeout(
+        supabase.rpc('get_user_role', { user_id: userId }),
+        10000,
+        'get_user_role'
+      );
       
-      const rolePromise = withTimeout(roleQuery, 10000, 'get_user_role');
-      const affiliatePromise = withTimeout(affiliateQuery, 10000, 'get_affiliate_data');
-      const profilePromise = withTimeout(profileQuery, 10000, 'profiles_query');
+      const affiliatePromise = withTimeout(
+        supabase.rpc('get_affiliate_data', { p_user_id: userId }),
+        10000,
+        'get_affiliate_data'
+      );
+      
+      const profilePromise = withTimeout(
+        supabase.from('profiles').select('full_name, display_name').eq('id', userId).maybeSingle(),
+        10000,
+        'profiles_query'
+      );
 
       console.log("AuthContext: Waiting for all promises to resolve...");
       
