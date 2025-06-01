@@ -18,9 +18,17 @@ interface CommissionTableProps {
 export function CommissionTable({ limit }: CommissionTableProps) {
   const { commissions, isLoading, isAdmin } = useAffiliate();
 
+  // Filter out any hardcoded example data
+  const filteredCommissions = commissions.filter(commission => 
+    commission.customerEmail && 
+    !commission.customerEmail.includes('unknown@example.com') &&
+    !commission.customerEmail.includes('example.com') &&
+    commission.customerEmail !== 'unknown@example.com'
+  );
+
   const displayCommissions = limit
-    ? commissions.slice(0, limit)
-    : commissions;
+    ? filteredCommissions.slice(0, limit)
+    : filteredCommissions;
 
   if (isLoading) {
     return <div className="text-center py-4">Loading commission data...</div>;
