@@ -20,7 +20,7 @@ interface CommissionTableProps {
 
 export function CommissionTable({ limit }: CommissionTableProps) {
   const { commissions, isLoading, error } = useAffiliate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -36,6 +36,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-4 w-20" />
+                {isAdmin && <Skeleton className="h-4 w-16" />}
                 <Skeleton className="h-4 w-16" />
               </div>
             ))}
@@ -92,7 +93,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Product</TableHead>
-                <TableHead>Amount</TableHead>
+                {isAdmin && <TableHead>Amount</TableHead>}
                 <TableHead>Commission</TableHead>
               </TableRow>
             </TableHeader>
@@ -113,7 +114,9 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                       size="sm"
                     />
                   </TableCell>
-                  <TableCell>${transaction.amount?.toFixed(2) || '0.00'}</TableCell>
+                  {isAdmin && (
+                    <TableCell>${transaction.amount?.toFixed(2) || '0.00'}</TableCell>
+                  )}
                   <TableCell className="font-semibold text-green-600">
                     ${transaction.commission?.toFixed(2) || '0.00'}
                   </TableCell>
