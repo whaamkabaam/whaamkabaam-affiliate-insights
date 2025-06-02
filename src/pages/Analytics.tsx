@@ -75,7 +75,7 @@ export default function Analytics() {
     value: number; 
     count: number; 
     avgSalesPerMonth: number;
-    avgRevenuePerMonth: number;
+    avgCommissionPerMonth: number;
     totalRevenue: number;
   }[] = [];
   let totalCommission = 0;
@@ -117,7 +117,7 @@ export default function Analytics() {
       count: product.count,
       totalRevenue: product.totalRevenue,
       avgSalesPerMonth: product.count / Math.max(product.monthsActive.size, 1),
-      avgRevenuePerMonth: product.totalRevenue / Math.max(product.monthsActive.size, 1)
+      avgCommissionPerMonth: product.value / Math.max(product.monthsActive.size, 1)
     }));
     
     totalCommission = productChartData.reduce((sum, product) => sum + product.value, 0);
@@ -226,9 +226,9 @@ export default function Analytics() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Target className="w-4 h-4 text-purple-500" />
-                <span className="text-sm text-muted-foreground">Avg Revenue/Month</span>
+                <span className="text-sm text-muted-foreground">Avg Commission/Month</span>
               </div>
-              <span className="font-semibold text-purple-500">${product.avgRevenuePerMonth.toFixed(2)}</span>
+              <span className="font-semibold text-purple-500">${product.avgCommissionPerMonth.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -307,8 +307,8 @@ export default function Analytics() {
                               fill="#8884d8"
                               dataKey="value"
                               stroke="none"
-                              onMouseEnter={(entry) => {
-                                setHoveredProduct(entry.name);
+                              onMouseEnter={(data) => {
+                                setHoveredProduct(data.name);
                               }}
                               onMouseLeave={() => setHoveredProduct(null)}
                             >
