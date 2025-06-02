@@ -4,46 +4,32 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, DatabaseIcon, Users, Copy } from "lucide-react";
+import { RefreshCw, DatabaseIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { AdminDashboardView } from "@/components/admin/AdminDashboardView";
+import { AdminOverview } from "@/components/admin/AdminOverview";
+import { UserManagement } from "@/components/admin/UserManagement";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Define a type for the stripe sync progress value structure
 interface StripeSyncProgress {
   progress: number;
 }
 
-interface UserCredential {
-  email: string;
-  name: string;
-  password: string;
-}
-
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
-  const { affiliateOverviews, isLoading, fetchAffiliateOverviews, error } = useAffiliate();
+  const { fetchAffiliateOverviews, isLoading } = useAffiliate();
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
   const [syncingStripe, setSyncingStripe] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
   const [progressPolling, setProgressPolling] = useState<NodeJS.Timeout | null>(null);
-  const [userCredentials, setUserCredentials] = useState<UserCredential[]>([]);
-  const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [initialDataFetched, setInitialDataFetched] = useState(false);
 
   useEffect(() => {
@@ -68,13 +54,6 @@ export default function AdminDashboard() {
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, isAdmin, navigate, initialDataFetched, fetchAffiliateOverviews]);
-  
-  // Display any errors that might occur
-  useEffect(() => {
-    if (error) {
-      toast.error(`Error: ${error}`);
-    }
-  }, [error]);
 
   // Effect for polling progress during sync
   useEffect(() => {
@@ -200,47 +179,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const getUserCredentials = async () => {
-    setLoadingCredentials(true);
-    try {
-      console.log("Calling setup-initial-users function...");
-      
-      const { data, error } = await supabase.functions.invoke("setup-initial-users", {
-        body: { user: user }
-      });
-      
-      console.log("Function response:", { data, error });
-      
-      if (error) {
-        console.error("Error getting credentials:", error);
-        toast.error(`Failed to get user credentials: ${error.message}`);
-        return;
-      }
-      
-      if (data && data.success) {
-        if (data.users && data.users.length > 0) {
-          setUserCredentials(data.users);
-          toast.success(`Retrieved credentials for ${data.users.length} users`);
-        } else {
-          toast.info("No new users were created - they may already exist");
-          setUserCredentials([]);
-        }
-      } else {
-        toast.error("Failed to retrieve credentials - unexpected response format");
-      }
-    } catch (error) {
-      console.error("Error calling setup function:", error);
-      toast.error("Failed to retrieve credentials");
-    } finally {
-      setLoadingCredentials(false);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  };
-
   return (
     <div className="flex min-h-screen bg-muted/40">
       <Sidebar />
@@ -248,7 +186,12 @@ export default function AdminDashboard() {
         <DashboardHeader />
         <main className="grid gap-6 p-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Admin Dashboard</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Admin Control Center</h1>
+              <p className="text-muted-foreground">
+                Manage affiliates, monitor performance, and oversee system operations
+              </p>
+            </div>
             <Button 
               variant="outline"
               size="sm"
@@ -262,53 +205,13 @@ export default function AdminDashboard() {
           
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="dashboard">Dashboard View</TabsTrigger>
-              <TabsTrigger value="management">Management</TabsTrigger>
+              <TabsTrigger value="overview">Network Overview</TabsTrigger>
+              <TabsTrigger value="dashboard">Affiliate Views</TabsTrigger>
+              <TabsTrigger value="management">System Management</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="space-y-4">
-              <Card className="w-full">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle>Affiliates Overview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    </div>
-                  ) : affiliateOverviews.length > 0 ? (
-                    <div className="border rounded-md overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Code</TableHead>
-                            <TableHead>Commission</TableHead>
-                            <TableHead className="text-right">Sales</TableHead>
-                            <TableHead className="text-right">Earned</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {affiliateOverviews.map((affiliate, i) => (
-                            <TableRow key={i}>
-                              <TableCell>{affiliate.email}</TableCell>
-                              <TableCell>{affiliate.affiliateCode}</TableCell>
-                              <TableCell>{(affiliate.commissionRate * 100).toFixed(0)}%</TableCell>
-                              <TableCell className="text-right">${affiliate.totalSales?.toFixed(2) || "0.00"}</TableCell>
-                              <TableCell className="text-right">${affiliate.totalCommission?.toFixed(2) || "0.00"}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No affiliates found.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <AdminOverview />
             </TabsContent>
             
             <TabsContent value="dashboard" className="space-y-4">
@@ -317,49 +220,7 @@ export default function AdminDashboard() {
             
             <TabsContent value="management" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="w-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Users className="h-5 w-5 mr-2" />
-                      User Credentials
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <Button 
-                        onClick={getUserCredentials}
-                        disabled={loadingCredentials}
-                        className="w-full"
-                      >
-                        {loadingCredentials ? "Loading..." : "Get User Credentials"}
-                      </Button>
-                      
-                      {userCredentials.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="font-medium">Generated User Credentials:</h4>
-                          {userCredentials.map((cred, index) => (
-                            <div key={index} className="border rounded-lg p-3 space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="font-medium">{cred.name}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyToClipboard(`Email: ${cred.email}\nPassword: ${cred.password}`)}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                <div>Email: {cred.email}</div>
-                                <div>Password: {cred.password}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                <UserManagement />
                 
                 <Card>
                   <CardHeader>
