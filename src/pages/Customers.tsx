@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -120,12 +119,11 @@ export default function Customers() {
       return;
     }
     
-    // Create CSV content with censored emails
-    const headers = ["Email", "Purchases", "Revenue", "Commission", "Last Purchase"];
+    // Create CSV content with censored emails (removed revenue column)
+    const headers = ["Email", "Purchases", "Commission", "Last Purchase"];
     const rows = filteredCustomers.map(customer => [
       censorEmail(customer.email),
       customer.purchases.toString(),
-      customer.revenue.toFixed(2),
       customer.commission.toFixed(2),
       new Date(customer.lastPurchase).toLocaleDateString()
     ]);
@@ -198,7 +196,6 @@ export default function Customers() {
                     <TableRow>
                       <TableHead>Customer</TableHead>
                       <TableHead className="text-right">Purchases</TableHead>
-                      <TableHead className="text-right">Revenue</TableHead>
                       <TableHead className="text-right">Commission</TableHead>
                       <TableHead>Last Purchase</TableHead>
                     </TableRow>
@@ -219,7 +216,6 @@ export default function Customers() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">{customer.purchases}</TableCell>
-                          <TableCell className="text-right">${customer.revenue.toFixed(2)}</TableCell>
                           <TableCell className="text-right">${customer.commission.toFixed(2)}</TableCell>
                           <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
                         </TableRow>

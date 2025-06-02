@@ -48,11 +48,14 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">Your email cannot be changed</p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="affiliateCode">Affiliate Code</Label>
-                  <Input id="affiliateCode" defaultValue={user?.affiliateCode} disabled />
-                  <p className="text-xs text-muted-foreground">This is your unique affiliate code</p>
-                </div>
+                {/* Only show affiliate code section if user is not Ayoub */}
+                {user?.affiliateCode !== 'ayoub' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="affiliateCode">Affiliate Code</Label>
+                    <Input id="affiliateCode" defaultValue={user?.affiliateCode} disabled />
+                    <p className="text-xs text-muted-foreground">This is your unique affiliate code</p>
+                  </div>
+                )}
                 <Button type="submit" className="bg-brand-red hover:bg-brand-red/90">Save Changes</Button>
               </form>
             </CardContent>
