@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -77,7 +76,7 @@ export default function Calendar() {
     const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
     
     return calendarDays.map((day) => {
-      const dateString = day.toISOString().split('T')[0];
+      const dateString = format(day, 'yyyy-MM-dd');
       const dayEvents = datesWithEvents[dateString];
       const hasEvents = dayEvents && dayEvents.count > 0;
       const isCurrentMonth = isSameMonth(day, currentMonth);
@@ -89,24 +88,24 @@ export default function Calendar() {
         <div 
           key={day.toISOString()}
           className={cn(
-            "relative min-h-[120px] max-h-[140px] border border-muted/30 p-2 cursor-pointer transition-all duration-200 group flex flex-col",
-            "hover:border-primary/40 hover:shadow-md hover:bg-gradient-to-br hover:from-primary/5 hover:to-secondary/5",
-            !isCurrentMonth && "bg-muted/20 opacity-50",
-            isDayToday && "ring-2 ring-primary/50 bg-primary/5",
-            isSelected && "bg-primary/10 border-primary/60 shadow-lg",
+            "relative min-h-[100px] border border-muted/30 p-3 cursor-pointer transition-all duration-200 group flex flex-col",
+            "hover:border-primary/40 hover:shadow-sm",
+            !isCurrentMonth && "bg-muted/10 opacity-60",
+            isDayToday && "ring-1 ring-primary/30 bg-primary/5",
+            isSelected && "bg-primary/10 border-primary/60 shadow-md",
             isHovered && "bg-primary/5",
-            hasEvents && "bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20"
+            hasEvents && "bg-gradient-to-br from-emerald-50/50 to-green-50/50 dark:from-emerald-950/10 dark:to-green-950/10"
           )}
           onClick={() => setSelectedDate(day)}
           onMouseEnter={() => setHoveredDate(day)}
           onMouseLeave={() => setHoveredDate(null)}
         >
-          {/* Date number and today star */}
-          <div className="flex items-start justify-between mb-2">
+          {/* Date number and today indicator */}
+          <div className="flex items-start justify-between mb-3">
             <div className={cn(
-              "font-medium text-sm transition-colors",
-              !isCurrentMonth && "text-muted-foreground",
-              isDayToday && "text-primary font-bold",
+              "font-medium text-sm",
+              !isCurrentMonth && "text-muted-foreground/60",
+              isDayToday && "text-primary font-semibold",
               isSelected && "text-primary"
             )}>
               {format(day, 'd')}
@@ -116,30 +115,24 @@ export default function Calendar() {
             )}
           </div>
           
-          {/* Events content - improved layout */}
+          {/* Events content - improved compact layout */}
           {hasEvents && (
-            <div className="flex-1 flex flex-col justify-center items-center space-y-1.5 min-h-0">
+            <div className="flex-1 flex flex-col justify-center items-center space-y-2">
               <Badge 
                 variant="secondary" 
                 className={cn(
-                  "text-xs px-2 py-1 bg-emerald-100 text-emerald-700 border-emerald-200 flex items-center gap-1 flex-shrink-0",
-                  "dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-                  "group-hover:scale-105 transition-transform duration-200"
+                  "text-xs px-2.5 py-1 bg-emerald-100/80 text-emerald-700 border-emerald-200/50 flex items-center gap-1.5",
+                  "dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800/30",
+                  "group-hover:scale-105 transition-transform duration-200 font-medium"
                 )}
               >
                 <Sparkles className="w-3 h-3 flex-shrink-0" />
                 <span className="whitespace-nowrap">{dayEvents.count} sale{dayEvents.count > 1 ? 's' : ''}</span>
               </Badge>
               
-              <div className="text-center flex-shrink-0">
-                <div className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 leading-tight">
-                  +${dayEvents.totalCommission.toFixed(2)}
-                </div>
+              <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 leading-none">
+                +${dayEvents.totalCommission.toFixed(2)}
               </div>
-              
-              {(isHovered || isSelected) && (
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-100/50 to-green-100/50 dark:from-emerald-900/20 dark:to-green-900/20 rounded pointer-events-none animate-pulse" />
-              )}
             </div>
           )}
         </div>
@@ -217,9 +210,9 @@ export default function Calendar() {
                     </div>
                   ) : (
                     <div className="calendar-container">
-                      <div className="grid grid-cols-7 gap-px bg-muted/30">
+                      <div className="grid grid-cols-7 gap-0 bg-muted/20">
                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                          <div key={day} className="h-12 flex items-center justify-center font-medium bg-gradient-to-r from-primary/10 to-secondary/10 text-primary">
+                          <div key={day} className="h-12 flex items-center justify-center font-medium bg-gradient-to-r from-primary/10 to-secondary/10 text-primary border-r border-b border-muted/30 last:border-r-0">
                             {day}
                           </div>
                         ))}
