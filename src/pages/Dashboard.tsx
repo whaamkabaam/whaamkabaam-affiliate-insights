@@ -40,14 +40,6 @@ export default function Dashboard() {
   console.log("Dashboard render - User affiliate code:", user?.affiliateCode);
   console.log("Dashboard render - Selected period:", selectedYear, selectedMonth);
 
-  // Redirect admin users to admin dashboard
-  useEffect(() => {
-    if (!authIsLoading && isAdmin) {
-      console.log("User is admin, redirecting to /admin");
-      navigate("/admin");
-    }
-  }, [authIsLoading, isAdmin, navigate]);
-
   // Memoized month change handler to prevent unnecessary re-renders
   const handleMonthChange = useCallback(async (year: number, month: number) => {
     console.log("Month changed to:", year, month);
@@ -58,7 +50,7 @@ export default function Dashboard() {
       setSelectedMonth(month);
 
       // Fetch new data for the selected period
-      if (user?.affiliateCode && !isAdmin) {
+      if (user?.affiliateCode) {
         try {
           await fetchCommissionData(year, month, false);
         } catch (error) {
@@ -70,18 +62,13 @@ export default function Dashboard() {
         setMonthSwitching(false);
       }
     }
-  }, [selectedYear, selectedMonth, user?.affiliateCode, isAdmin, fetchCommissionData]);
+  }, [selectedYear, selectedMonth, user?.affiliateCode, fetchCommissionData]);
 
   // Single effect for initial data fetching
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
       console.log("Auth still loading, waiting...");
-      return;
-    }
-
-    // Skip if user is admin (they'll be redirected)
-    if (isAdmin) {
       return;
     }
 
@@ -98,7 +85,7 @@ export default function Dashboard() {
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, initialDataFetched, selectedYear, selectedMonth]);
+  }, [user?.affiliateCode, authIsLoading, affiliateIsLoading, fetchCommissionData, initialDataFetched, selectedYear, selectedMonth]);
 
   // Handle error display
   useEffect(() => {
@@ -179,7 +166,7 @@ export default function Dashboard() {
       );
     }
 
-    if (user && !user.affiliateCode && !isAdmin) {
+    if (user && !user.affiliateCode) {
       console.log("Showing no affiliate code warning");
       return (
         <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
@@ -205,7 +192,7 @@ export default function Dashboard() {
       );
     }
 
-    if (!user?.affiliateCode && !isAdmin) {
+    if (!user?.affiliateCode) {
       console.log("No user or affiliate code, returning null");
       return null;
     }
@@ -271,6 +258,15 @@ export default function Dashboard() {
               >
                 View All
               </Button>
+              {isAdmin && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => navigate('/admin')}
+                >
+                  Admin Panel
+                </Button>
+              )}
             </div>
           </div>
           <CommissionTable limit={5} />

@@ -10,12 +10,9 @@ const Index = () => {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        // Redirect admins to admin dashboard, others to regular dashboard
-        if (isAdmin) {
-          navigate("/admin");
-        } else {
-          navigate("/dashboard");
-        }
+        // All authenticated users go to regular dashboard
+        // They can access admin features via navigation if they're admin
+        navigate("/dashboard");
       } else {
         // Not authenticated, redirect to login
         navigate("/login");

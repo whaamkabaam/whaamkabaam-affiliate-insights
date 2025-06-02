@@ -1,11 +1,14 @@
 
 import { cn } from "@/lib/utils";
-import { CalendarIcon, LineChartIcon, UsersIcon, SettingsIcon, HomeIcon } from "lucide-react";
+import { CalendarIcon, LineChartIcon, UsersIcon, SettingsIcon, HomeIcon, ShieldIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Sidebar({ className, ...props }: SidebarProps) {
+  const { isAdmin } = useAuth();
+
   return (
     <div className={cn("pb-12 bg-sidebar text-sidebar-foreground w-64 flex-shrink-0 border-r border-sidebar-border", className)} {...props}>
       <div className="space-y-4 py-4">
@@ -71,6 +74,20 @@ export function Sidebar({ className, ...props }: SidebarProps) {
               <SettingsIcon className="h-4 w-4" />
               <span>Settings</span>
             </NavLink>
+            {isAdmin && (
+              <NavLink 
+                to="/admin"
+                className={({ isActive }) => 
+                  cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:text-sidebar-accent",
+                    isActive && "bg-sidebar-accent/10 text-sidebar-accent"
+                  )
+                }
+              >
+                <ShieldIcon className="h-4 w-4" />
+                <span>Admin Panel</span>
+              </NavLink>
+            )}
           </div>
         </div>
       </div>
