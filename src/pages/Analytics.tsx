@@ -111,14 +111,17 @@ export default function Analytics() {
       return acc;
     }, {});
 
-    productChartData = Object.values(productData).map(product => ({
-      name: product.name,
-      value: product.value,
-      count: product.count,
-      totalRevenue: product.totalRevenue,
-      avgSalesPerMonth: product.count / Math.max(product.monthsActive.size, 1),
-      avgCommissionPerMonth: product.value / Math.max(product.monthsActive.size, 1)
-    }));
+    // Sort by commission value descending - THIS IS THE KEY FIX
+    productChartData = Object.values(productData)
+      .map(product => ({
+        name: product.name,
+        value: product.value,
+        count: product.count,
+        totalRevenue: product.totalRevenue,
+        avgSalesPerMonth: product.count / Math.max(product.monthsActive.size, 1),
+        avgCommissionPerMonth: product.value / Math.max(product.monthsActive.size, 1)
+      }))
+      .sort((a, b) => b.value - a.value); // Sort here so both chart and cards use same order
     
     totalCommission = productChartData.reduce((sum, product) => sum + product.value, 0);
     totalRevenue = productChartData.reduce((sum, product) => sum + product.totalRevenue, 0);
@@ -349,16 +352,14 @@ export default function Analytics() {
                     
                     {productChartData.length > 0 ? (
                       <div className="grid gap-4">
-                        {productChartData
-                          .sort((a, b) => b.value - a.value)
-                          .map((product, index) => (
-                            <ProductInsightCard 
-                              key={product.name}
-                              product={product}
-                              index={index}
-                              total={totalCommission}
-                            />
-                          ))}
+                        {productChartData.map((product, index) => (
+                          <ProductInsightCard 
+                            key={product.name}
+                            product={product}
+                            index={index}
+                            total={totalCommission}
+                          />
+                        ))}
                       </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
