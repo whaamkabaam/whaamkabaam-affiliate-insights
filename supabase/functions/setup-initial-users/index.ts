@@ -121,12 +121,13 @@ serve(async (req) => {
       return createdUsers;
     }
 
-    // After creating users, ensure they have affiliate entries
+    // After creating users, ensure they have affiliate entries with CORRECT mappings
     async function setupAffiliates() {
       console.log("Setting up affiliate entries for users...");
       
+      // FIXED: Corrected the affiliate mappings
       const affiliateSetups = [
-        { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1, stripePromoId: "promo_ayoub" },
+        { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1, stripePromoId: "promo_1QccV9CgyJ2z2jNZBnSTn73U" },
         { email: "nic@whaamkabaam.com", code: "nic", rate: 0.1, stripePromoId: "promo_1QyefCCgyJ2z2jNZEZv16p7s" },
         { email: "maru@whaamkabaam.com", code: "maru", rate: 0.1, stripePromoId: "promo_1QvpMsCgyJ2z2jNZ0IC6vKLk" },
         { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2, stripePromoId: "promo_admin" }
@@ -167,6 +168,8 @@ serve(async (req) => {
             stripe_promotion_code_id: setup.stripePromoId
           };
           
+          console.log(`Setting up affiliate for ${setup.email} with promo code: ${setup.stripePromoId}`);
+          
           if (existingAffiliates && existingAffiliates.length > 0) {
             console.log(`Affiliate entry already exists for ${setup.email}, updating...`);
             
@@ -179,7 +182,7 @@ serve(async (req) => {
             if (updateError) {
               console.error(`Error updating affiliate entry: ${updateError.message}`);
             } else {
-              console.log(`Updated affiliate entry for ${setup.email}`);
+              console.log(`Updated affiliate entry for ${setup.email} with correct promo code: ${setup.stripePromoId}`);
             }
           } else {
             console.log(`Creating new affiliate entry for ${setup.email}`);
@@ -192,12 +195,25 @@ serve(async (req) => {
             if (insertError) {
               console.error(`Error creating affiliate entry: ${insertError.message}`);
             } else {
-              console.log(`Created affiliate entry for ${setup.email}`);
+              console.log(`Created affiliate entry for ${setup.email} with promo code: ${setup.stripePromoId}`);
             }
           }
         } catch (err) {
           console.error(`Error setting up affiliate for ${setup.email}:`, err);
         }
+      }
+
+      // Verify the final mappings
+      console.log("Verifying affiliate mappings...");
+      const { data: finalAffiliates, error: verifyError } = await supabaseAdmin
+        .from('affiliates')
+        .select('affiliate_code, stripe_promotion_code_id');
+      
+      if (!verifyError && finalAffiliates) {
+        console.log("Final affiliate mappings:");
+        finalAffiliates.forEach(affiliate => {
+          console.log(`${affiliate.affiliate_code} -> ${affiliate.stripe_promotion_code_id}`);
+        });
       }
     }
 
@@ -207,7 +223,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Initial users and affiliates setup completed with secure passwords.',
+        message: 'Initial users and affiliates setup completed with secure passwords and correct promo code mappings.',
         users: createdUsers.map(user => ({
           email: user.email,
           name: user.name,

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -42,13 +43,28 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Calculate Unix timestamps for the date range
-    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
-    const startTimestamp = Math.floor(startDate.getTime() / 1000);
-    const endTimestamp = Math.floor(endDate.getTime() / 1000);
-
-    console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    // FIXED: Calculate Unix timestamps for the date range with proper "All Time" handling
+    let startTimestamp, endTimestamp;
+    let startDate, endDate;
+    
+    if (year === 0 && month === 0) {
+      // For "All Time" - fetch from a reasonable start date (e.g., 5 years ago) to now
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+      startDate = fiveYearsAgo;
+      endDate = new Date();
+      startTimestamp = Math.floor(startDate.getTime() / 1000);
+      endTimestamp = Math.floor(endDate.getTime() / 1000);
+      console.log(`Fetching Stripe sessions for "All Time" (last 5 years) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    } else {
+      // For specific month/year
+      startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+      startTimestamp = Math.floor(startDate.getTime() / 1000);
+      endTimestamp = Math.floor(endDate.getTime() / 1000);
+      console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    }
+    
     console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
 
     // CRITICAL: ALWAYS clean up incorrect Ayoub data first
