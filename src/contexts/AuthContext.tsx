@@ -34,6 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   // Enhanced email-based mapping for known users - ONLY admin@whaamkabaam.com is admin
+  // Updated to use internal affiliate codes that match promo_code_name in database
   const getKnownUserData = (email: string): { affiliateCode: string; role: AppRole; name: string } | null => {
     const emailLower = email.toLowerCase();
     const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
