@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,19 +26,33 @@ export default function Dashboard() {
     isLoading: affiliateIsLoading,
     error
   } = useAffiliate();
+  const navigate = useNavigate();
+
+  // Redirect admin users to admin dashboard immediately
+  useEffect(() => {
+    if (!authIsLoading && isAdmin) {
+      navigate("/admin");
+      return;
+    }
+  }, [isAdmin, authIsLoading, navigate]);
+
   // Default to "all time" view (year 0, month 0)
   const [selectedYear, setSelectedYear] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [dataRefreshing, setDataRefreshing] = useState(false);
   const [monthSwitching, setMonthSwitching] = useState(false);
   const [initialDataFetched, setInitialDataFetched] = useState(false);
-  const navigate = useNavigate();
 
   // Debug logging to track loading states
   console.log("Dashboard render - Auth loading:", authIsLoading, "User:", user?.email, "Is admin:", isAdmin);
   console.log("Dashboard render - Affiliate loading:", affiliateIsLoading, "Has summary:", !!summary, "Error:", error);
   console.log("Dashboard render - User affiliate code:", user?.affiliateCode);
   console.log("Dashboard render - Selected period:", selectedYear, selectedMonth);
+
+  // Early return if this is an admin user - they should be redirected
+  if (!authIsLoading && isAdmin) {
+    return null;
+  }
 
   // Memoized month change handler to prevent unnecessary re-renders
   const handleMonthChange = useCallback(async (year: number, month: number) => {
@@ -71,6 +86,11 @@ export default function Dashboard() {
       return;
     }
 
+    // Skip if this is an admin user
+    if (isAdmin) {
+      return;
+    }
+
     // Only proceed if we have a user with an affiliate code and haven't fetched initial data
     if (user?.affiliateCode && !initialDataFetched && !affiliateIsLoading) {
       console.log("Fetching initial commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
@@ -82,7 +102,7 @@ export default function Dashboard() {
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, authIsLoading, affiliateIsLoading, fetchCommissionData, initialDataFetched, selectedYear, selectedMonth]);
+  }, [user?.affiliateCode, authIsLoading, affiliateIsLoading, fetchCommissionData, initialDataFetched, selectedYear, selectedMonth, isAdmin]);
 
   // Handle error display
   useEffect(() => {
@@ -255,15 +275,6 @@ export default function Dashboard() {
               >
                 View All
               </Button>
-              {isAdmin && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => navigate('/admin')}
-                >
-                  Admin Panel
-                </Button>
-              )}
             </div>
           </div>
           <CommissionTable limit={5} />
