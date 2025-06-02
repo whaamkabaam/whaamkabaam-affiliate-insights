@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
