@@ -23,9 +23,6 @@ serve(async (req) => {
   ];
   const AYOUB_START_DATE = new Date("2025-05-20T00:00:00Z");
 
-  // List of problematic customer emails to track
-  const PROBLEMATIC_EMAILS = ["nicholasm803@gmail.com", "novaapalz@gmail.com"];
-
   try {
     const requestData = await req.json();
     const { year, month, forceRefresh = false } = requestData;
@@ -42,50 +39,40 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // FIXED: Calculate Unix timestamps for the date range with proper "All Time" handling
+    // FIXED: Calculate Unix timestamps for the date range with proper handling
     let startTimestamp, endTimestamp;
     let startDate, endDate;
     
     if (year === 0 && month === 0) {
-      // For "All Time" - fetch from a reasonable start date (e.g., 5 years ago) to now
+      // For "All Time" - fetch from a reasonable start date to NOW (not future)
       const fiveYearsAgo = new Date();
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
       startDate = fiveYearsAgo;
-      endDate = new Date();
+      endDate = new Date(); // Current time for latest data
       startTimestamp = Math.floor(startDate.getTime() / 1000);
       endTimestamp = Math.floor(endDate.getTime() / 1000);
-      console.log(`Fetching Stripe sessions for "All Time" (last 5 years) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`Fetching Stripe sessions for "All Time" from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     } else {
-      // CRITICAL FIX: For specific month/year - ensure we capture the ENTIRE month including the last day
+      // For specific month/year - ensure we capture the ENTIRE month
       startDate = new Date(parseInt(year), parseInt(month) - 1, 1, 0, 0, 0, 0);
-      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999); // Last day of month at 23:59:59
+      
+      // CRITICAL FIX: For current month, use current time as end date to get latest data
+      const currentDate = new Date();
+      const isCurrentMonth = year == currentDate.getFullYear() && month == (currentDate.getMonth() + 1);
+      
+      if (isCurrentMonth) {
+        endDate = new Date(); // Use current time for current month
+        console.log(`CURRENT MONTH SYNC: Using current time as end date: ${endDate.toISOString()}`);
+      } else {
+        endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999); // Last day of month
+      }
+      
       startTimestamp = Math.floor(startDate.getTime() / 1000);
       endTimestamp = Math.floor(endDate.getTime() / 1000);
-      console.log(`FIXED DATE RANGE: Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     }
     
     console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
-
-    // CRITICAL: ALWAYS clean up incorrect Ayoub data first
-    console.log("CRITICAL CLEANUP: Removing ALL incorrect Ayoub data from database...");
-    const { error: cleanupError } = await supabaseClient
-      .from('promo_code_sales')
-      .delete()
-      .eq('promo_code_name', 'ayoub')
-      .neq('product_id', AYOUB_COACHING_PRODUCT_ID);
-    
-    if (cleanupError) {
-      console.error("Error cleaning up incorrect Ayoub data:", cleanupError);
-    } else {
-      console.log("Successfully cleaned up ALL incorrect Ayoub data");
-    }
-
-    // FIXED: Only sync when explicitly requested or for current month, not always
-    const currentDate = new Date();
-    const isCurrentMonth = year == currentDate.getFullYear() && month == (currentDate.getMonth() + 1);
-    const shouldSync = forceRefresh || isCurrentMonth;
-    
-    console.log(`Starting Stripe data sync. Force refresh: ${forceRefresh}, Current month: ${isCurrentMonth}, Will sync: ${shouldSync}`);
 
     // Get affiliate mapping from database
     const { data: affiliates, error: affiliateError } = await supabaseClient
@@ -161,63 +148,32 @@ serve(async (req) => {
         
         console.log(`Processing session ${session.id}: Product ${actualProductIdInSession}, Date: ${sessionDate.toISOString()}, Customer: ${customerEmail}`);
         
-        // COMPREHENSIVE LOGGING FOR PROBLEMATIC SESSIONS
-        const isProblematicSession = PROBLEMATIC_EMAILS.includes(customerEmail);
-        
-        if (isProblematicSession) {
-          console.log(`🔍 DETAILED DEBUG for PROBLEMATIC session ${session.id}:`);
-          console.log(`- Session ID: ${session.id}`);
-          console.log(`- Customer Email: ${customerEmail}`);
-          console.log(`- Session Created: ${sessionDate.toISOString()}`);
-          console.log(`- Ayoub Start Date: ${AYOUB_START_DATE.toISOString()}`);
-          console.log(`- Date Check (>= start): ${sessionDate >= AYOUB_START_DATE}`);
-          console.log(`- Product ID from session: ${actualProductIdInSession}`);
-          console.log(`- Expected coaching product: ${AYOUB_COACHING_PRODUCT_ID}`);
-          console.log(`- Product match: ${actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID}`);
-          console.log(`- Session status: ${session.payment_status}`);
-          console.log(`- Amount total: ${session.amount_total}`);
-          console.log(`- Full session object:`, JSON.stringify(session, null, 2));
-          console.log(`- Discounts array:`, JSON.stringify(session.discounts, null, 2));
-          console.log(`- Line items:`, JSON.stringify(session.line_items, null, 2));
-        }
-
-        // CRITICAL FIX: Only process sessions that are actually paid
+        // CRITICAL: Only process sessions that are actually paid
         if (session.payment_status !== "paid") {
-          console.log(`Skipping session ${session.id} for customer ${customerEmail} due to payment_status: ${session.payment_status} (Overall status: ${session.status})`);
-          if (isProblematicSession) {
-            console.log(`🔍 PROBLEMATIC - SKIPPED due to payment_status: ${session.payment_status}, session status: ${session.status}`);
-          }
+          console.log(`Skipping session ${session.id} for customer ${customerEmail} due to payment_status: ${session.payment_status}`);
           continue;
         }
         
-        // ENHANCED DISCOUNT PROCESSING FOR NIC'S SESSIONS
+        // Extract promotion code and affiliate assignment
         let stripePromotionCodeId = null;
         let affiliateCode = null;
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
-            console.log(`🔍 NIC DEBUG - Processing discount for session ${session.id}:`, JSON.stringify(discount, null, 2));
-            
-            // ENHANCED: Try multiple ways to extract promotion code
             if (discount.promotion_code) {
               stripePromotionCodeId = discount.promotion_code;
-              console.log(`🔍 NIC DEBUG - Found promotion_code: ${stripePromotionCodeId}`);
               break;
             } else if (discount.coupon && discount.coupon.id) {
               stripePromotionCodeId = discount.coupon.id;
-              console.log(`🔍 NIC DEBUG - Found coupon.id: ${stripePromotionCodeId}`);
               break;
             } else if (discount.id) {
-              // Sometimes the discount ID itself is the promotion code
               stripePromotionCodeId = discount.id;
-              console.log(`🔍 NIC DEBUG - Using discount.id: ${stripePromotionCodeId}`);
               break;
             }
           }
         }
 
-        console.log(`🔍 NIC DEBUG - Final stripePromotionCodeId: ${stripePromotionCodeId}`);
-        console.log(`🔍 NIC DEBUG - Available affiliate mappings:`, Object.keys(stripeToAffiliateMap));
+        console.log(`Found stripePromotionCodeId: ${stripePromotionCodeId}`);
 
         // CRITICAL AYOUB LOGIC: Only assign Ayoub to coaching products after his start date
         if (!stripePromotionCodeId && 
@@ -229,16 +185,8 @@ serve(async (req) => {
         } else if (stripePromotionCodeId) {
           // Map Stripe promotion code to internal affiliate code
           affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
-          console.log(`🔍 NIC DEBUG - Mapped ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
-          
-          // ADDITIONAL DEBUGGING FOR NIC'S SPECIFIC PROMO CODE
-          if (stripePromotionCodeId === "promo_1QyefCCgyJ2z2jNZEZv16p7s") {
-            console.log(`🚨 NIC'S PROMO CODE DETECTED! Session: ${session.id}, Mapped to: ${affiliateCode}`);
-            console.log(`🚨 NIC MAPPING CHECK - Available mappings:`, stripeToAffiliateMap);
-          }
+          console.log(`Mapped ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
         }
-
-        console.log(`🔍 NIC DEBUG - Final affiliateCode assignment: ${affiliateCode}`);
         
         // Skip sessions without affiliate assignment
         if (!affiliateCode) {
@@ -254,13 +202,12 @@ serve(async (req) => {
 
         console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
-        // CRITICAL FIX: Commission calculation logic - use original price for non-Ayoub affiliates
+        // FIXED: Commission calculation logic - 20% for non-Ayoub, special logic for Ayoub
         const amountPaid = (session.amount_total || 0) / 100;
         const originalAmount = (session.amount_subtotal || session.amount_total || 0) / 100; // Use subtotal (pre-discount) for commission calculation
         let affiliateCommission = 0;
 
         if (affiliateCode === AYOUB_AFFILIATE_CODE) {
-          // ... keep existing code (Ayoub commission calculation logic)
           if (sessionDate < AYOUB_START_DATE) {
             console.log(`SyncStripe: Ayoub session ${session.id} is before start date ${AYOUB_START_DATE.toISOString()}, skipping commission.`);
             affiliateCommission = 0;
@@ -294,18 +241,12 @@ serve(async (req) => {
             }
           }
         } else if (affiliateCode) {
-          // CRITICAL FIX: For other affiliates (Nic, Maru, etc.) - calculate commission on ORIGINAL price (pre-discount) at 20%
+          // FIXED: For other affiliates - calculate commission on ORIGINAL price (pre-discount) at 20%
           console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
           
-          // FIXED: Use 20% (0.2) commission rate for all non-Ayoub affiliates
-          const commissionRate = 0.2; // 20% commission rate
+          const commissionRate = 0.2; // 20% commission rate for all non-Ayoub affiliates
           affiliateCommission = originalAmount * commissionRate;
-          console.log(`SyncStripe: FIXED COMMISSION CALCULATION for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} (20%) = $${affiliateCommission.toFixed(2)} (was incorrectly using paid amount $${amountPaid})`);
-          
-          // SPECIAL LOGGING FOR NIC
-          if (affiliateCode === 'nic') {
-            console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Original Amount: $${originalAmount}, Paid Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
-          }
+          console.log(`SyncStripe: Commission calculation for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} (20%) = $${affiliateCommission.toFixed(2)}`);
         }
 
         const record = {
@@ -322,11 +263,6 @@ serve(async (req) => {
           refreshed_at: new Date().toISOString()
         };
 
-        // SPECIAL LOGGING FOR NIC'S RECORDS
-        if (affiliateCode === 'nic') {
-          console.log(`🚨 NIC RECORD CREATED:`, JSON.stringify(record, null, 2));
-        }
-
         commissionRecords.push(record);
         processedCount++;
 
@@ -340,15 +276,8 @@ serve(async (req) => {
     }
 
     console.log(`Found ${commissionRecords.length} affiliate commission records`);
-    
-    // LOG NIC'S RECORDS SPECIFICALLY
-    const nicRecords = commissionRecords.filter(r => r.promo_code_name === 'nic');
-    console.log(`🚨 NIC RECORDS FOUND: ${nicRecords.length}`);
-    if (nicRecords.length > 0) {
-      console.log(`🚨 NIC RECORDS:`, JSON.stringify(nicRecords, null, 2));
-    }
 
-    // Before saving new records, delete ALL existing records for this period to ensure clean data
+    // Before saving new records, delete existing records for this period to ensure clean data
     console.log(`Deleting existing records for ${year}-${month} to ensure clean data...`);
     const { error: deleteError } = await supabaseClient
       .from('promo_code_sales')
@@ -385,21 +314,6 @@ serve(async (req) => {
 
         savedCount += batch.length;
         console.log(`Saved batch ${Math.ceil((i + 1) / batchSize)}, total saved: ${savedCount}`);
-      }
-      
-      // FINAL CHECK FOR NIC'S DATA
-      const { data: nicCheck, error: nicCheckError } = await supabaseClient
-        .from('promo_code_sales')
-        .select('*')
-        .eq('promo_code_name', 'nic')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
-      
-      if (!nicCheckError && nicCheck) {
-        console.log(`🚨 NIC DATA CHECK AFTER SAVE: Found ${nicCheck.length} records in database`);
-        if (nicCheck.length > 0) {
-          console.log(`🚨 NIC SAVED RECORDS:`, JSON.stringify(nicCheck, null, 2));
-        }
       }
     }
 

@@ -19,7 +19,7 @@ export const useAffiliateData = (
   const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
   const [lastFetchedMonthYear, setLastFetchedMonthYear] = useState<string | null>(null);
   
-  // FIXED: Track ongoing fetch operations to prevent duplicates
+  // Track ongoing fetch operations to prevent duplicates
   const ongoingFetches = useRef<Set<string>>(new Set());
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
@@ -103,7 +103,7 @@ export const useAffiliateData = (
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
     const monthYearKey = `${year}-${month}`;
     
-    // FIXED: Prevent duplicate fetches for the same key
+    // Prevent duplicate fetches for the same key
     if (ongoingFetches.current.has(fetchKey)) {
       console.log(`Already fetching data for ${fetchKey}, skipping duplicate request`);
       return;
@@ -112,9 +112,11 @@ export const useAffiliateData = (
     const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
     const shouldForceFetch = forceRefresh || isMonthYearChange;
     
-    // OPTIMIZED: Only sync when absolutely necessary
+    // FIXED: Auto-sync for "All Time" view and current month to ensure latest data
     const currentDate = new Date();
-    const shouldSync = forceRefresh; // Only sync when explicitly requested
+    const isCurrentMonth = year === currentDate.getFullYear() && month === (currentDate.getMonth() + 1);
+    const isAllTimeView = year === 0 && month === 0;
+    const shouldSync = forceRefresh || isAllTimeView || isCurrentMonth;
     
     setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);

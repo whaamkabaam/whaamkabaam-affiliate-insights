@@ -34,11 +34,18 @@ export function MonthlyCommissionChart() {
       
       try {
         const data = [];
-        // CRITICAL FIX: Include ALL months from January up to current month (including June for 2025)
+        // Include ALL months from January up to current month
         for (let month = 1; month <= currentMonth; month++) {
-          // FIXED: Calculate proper date range for the ENTIRE month including last day
+          // Calculate proper date range for the ENTIRE month
           const startDate = new Date(currentYear, month - 1, 1, 0, 0, 0, 0).toISOString();
-          const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString(); // Last day of month
+          
+          // FIXED: For current month, use current time as end date to capture latest sales
+          let endDate;
+          if (month === currentMonth) {
+            endDate = new Date().toISOString(); // Current time for current month
+          } else {
+            endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString(); // Last day of month
+          }
           
           // Determine the effective start date for filtering commissions
           let effectiveFilterStartDate = startDate;
