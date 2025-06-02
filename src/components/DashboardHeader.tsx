@@ -13,7 +13,7 @@ export function DashboardHeader() {
       <div className="flex gap-3 items-center font-semibold">
         <Logo size="small" />
         <span className="text-xl font-bold bg-gradient-to-r from-brand-red to-brand-yellow bg-clip-text text-transparent">
-          WhaamKabaam
+          whaamkabaam | Affiliate Dashboard
         </span>
       </div>
       <div className="ml-auto flex items-center gap-2">

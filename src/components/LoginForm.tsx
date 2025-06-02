@@ -46,7 +46,7 @@ export function LoginForm() {
           <Logo size="large" />
         </div>
         <CardTitle className="text-3xl font-bold bg-gradient-to-r from-brand-red to-brand-yellow bg-clip-text text-transparent">
-          WhaamKabaam
+          whaamkabaam
         </CardTitle>
         <CardDescription className="text-lg">
           Affiliate Dashboard
@@ -120,7 +120,7 @@ export function LoginForm() {
         </form>
       </CardContent>
       <CardFooter className="flex justify-center text-sm text-muted-foreground">
-        <p>Welcome to the WhaamKabaam Affiliate Program</p>
+        <p>Welcome to the whaamkabaam Affiliate Program</p>
       </CardFooter>
     </Card>
   );
