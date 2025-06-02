@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CommissionTable } from "@/components/CommissionTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { censorEmail } from "@/utils/emailUtils";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -39,13 +40,13 @@ export default function Analytics() {
     if (user?.affiliateCode) {
       handleMonthChange(selectedYear, selectedMonth);
     }
-  }, [user?.affiliateCode]);
+  }, [user?.affiliateCode, handleMonthChange, selectedYear, selectedMonth]);
 
-  // Calculate product distribution
+  // Calculate product distribution based on actual commission amounts (not sale amounts)
   const productData = commissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
     const productMap: Record<string, string> = {
       "prod_RINKAvP3L2kZeV": "Basic",
-      "prod_RINJvQw1Qw1Qw1Q": "Premium",
+      "prod_RINJvQw1Qw1Qw1Q": "Premium", 
       "prod_RINO6yE0y4O9gX": "Enterprise",
     };
     
@@ -55,14 +56,15 @@ export default function Analytics() {
       acc[productName] = { name: productName, value: 0 };
     }
     
-    acc[productName].value += commission.amount;
+    // Use commission amount instead of sale amount for affiliate perspective
+    acc[productName].value += commission.commission;
     return acc;
   }, {});
 
   const productChartData = Object.values(productData);
   const COLORS = ['#FF3F4E', '#FFCC00', '#0088FE', '#00C49F'];
 
-  // Calculate daily distribution
+  // Calculate daily commission distribution
   const dailyData = commissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
     const date = new Date(commission.date);
     const day = date.getDate().toString();
@@ -141,7 +143,7 @@ export default function Analytics() {
                 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Product Distribution</CardTitle>
+                    <CardTitle>Commission by Product</CardTitle>
                   </CardHeader>
                   <CardContent className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
@@ -187,7 +189,7 @@ export default function Analytics() {
                       <div key={product.name} className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="font-medium">{product.name} Plan</div>
-                          <div className="text-sm text-muted-foreground">${product.value.toFixed(2)} Revenue</div>
+                          <div className="text-sm text-muted-foreground">${product.value.toFixed(2)} Commission</div>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div 

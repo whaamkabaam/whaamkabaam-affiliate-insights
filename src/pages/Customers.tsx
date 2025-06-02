@@ -10,9 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar } from "@/components/ui/avatar";
 import { SearchIcon, Download } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { censorEmail } from "@/utils/emailUtils";
 
 interface CustomerData {
   email: string;
@@ -85,7 +85,7 @@ export default function Customers() {
     if (user?.affiliateCode) {
       handleMonthChange(selectedYear, selectedMonth);
     }
-  }, [user?.affiliateCode]);
+  }, [user?.affiliateCode, handleMonthChange, selectedYear, selectedMonth]);
 
   useEffect(() => {
     processCustomerData();
@@ -103,10 +103,10 @@ export default function Customers() {
       return;
     }
     
-    // Create CSV content
+    // Create CSV content with censored emails
     const headers = ["Email", "Purchases", "Revenue", "Commission", "Last Purchase"];
     const rows = filteredCustomers.map(customer => [
-      customer.email,
+      censorEmail(customer.email),
       customer.purchases.toString(),
       customer.revenue.toFixed(2),
       customer.commission.toFixed(2),
@@ -187,24 +187,27 @@ export default function Customers() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredCustomers.map((customer) => (
-                      <TableRow key={customer.email}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <Avatar>
-                              <div className="bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center h-full w-full">
-                                {customer.email.charAt(0).toUpperCase()}
-                              </div>
-                            </Avatar>
-                            {customer.email}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">{customer.purchases}</TableCell>
-                        <TableCell className="text-right">${customer.revenue.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">${customer.commission.toFixed(2)}</TableCell>
-                        <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredCustomers.map((customer) => {
+                      const censoredEmail = censorEmail(customer.email);
+                      return (
+                        <TableRow key={customer.email}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Avatar>
+                                <div className="bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center h-full w-full">
+                                  {censoredEmail.charAt(0).toUpperCase()}
+                                </div>
+                              </Avatar>
+                              {censoredEmail}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{customer.purchases}</TableCell>
+                          <TableCell className="text-right">${customer.revenue.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">${customer.commission.toFixed(2)}</TableCell>
+                          <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

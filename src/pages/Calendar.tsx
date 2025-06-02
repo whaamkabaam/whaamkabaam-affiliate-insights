@@ -8,6 +8,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-reac
 import { format, addMonths, subMonths } from "date-fns";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { censorEmail } from "@/utils/emailUtils";
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch data for the current month when component mounts
+  // Fetch data for the current month when component mounts or month changes
   useEffect(() => {
     if (user?.affiliateCode) {
       const year = currentMonth.getFullYear();
@@ -23,7 +24,7 @@ export default function Calendar() {
       setIsLoading(true);
       fetchCommissionData(year, month, false).finally(() => setIsLoading(false));
     }
-  }, [user?.affiliateCode, currentMonth, fetchCommissionData]);
+  }, [user?.affiliateCode, currentMonth]); // Removed fetchCommissionData from deps to prevent infinite loop
 
   // Generate dates with events
   const datesWithEvents = commissions.reduce((acc: Record<string, number>, commission) => {
@@ -33,12 +34,12 @@ export default function Calendar() {
   }, {});
 
   const nextMonth = useCallback(() => {
-    setCurrentMonth(addMonths(currentMonth, 1));
-  }, [currentMonth]);
+    setCurrentMonth(prev => addMonths(prev, 1));
+  }, []);
 
   const prevMonth = useCallback(() => {
-    setCurrentMonth(subMonths(currentMonth, 1));
-  }, [currentMonth]);
+    setCurrentMonth(prev => subMonths(prev, 1));
+  }, []);
 
   // Generate calendar days
   const generateCalendarDays = () => {
@@ -150,7 +151,7 @@ export default function Calendar() {
                         <div>
                           <p className="font-medium">{format(new Date(commission.date), "MMMM d, yyyy")}</p>
                           <p className="text-sm text-muted-foreground">
-                            Commission: ${commission.commission.toFixed(2)} from {commission.customerEmail}
+                            Commission: ${commission.commission.toFixed(2)} from {censorEmail(commission.customerEmail)}
                           </p>
                         </div>
                         <div className="text-right">
