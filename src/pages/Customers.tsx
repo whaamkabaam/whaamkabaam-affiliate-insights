@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -23,97 +24,73 @@ interface CustomerData {
 
 export default function Customers() {
   const { fetchCommissionData, commissions } = useAffiliate();
-  const { isAuthenticated, isAdmin } = useAuth();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const { isAuthenticated, isAdmin, user } = useAuth();
+  const [selectedYear, setSelectedYear] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch customers data from the database
-  const fetchCustomers = async () => {
+  // Process commissions data to get customer information
+  const processCustomerData = useCallback(() => {
+    const customerMap: Record<string, CustomerData> = {};
+    
+    commissions.forEach(commission => {
+      if (!commission.customerEmail) return;
+      
+      if (!customerMap[commission.customerEmail]) {
+        customerMap[commission.customerEmail] = {
+          email: commission.customerEmail,
+          purchases: 0,
+          revenue: 0,
+          commission: 0,
+          lastPurchase: commission.date
+        };
+      }
+      
+      const customer = customerMap[commission.customerEmail];
+      customer.purchases += 1;
+      customer.revenue += commission.amount;
+      customer.commission += commission.commission;
+      
+      // Update last purchase date if newer
+      if (new Date(commission.date) > new Date(customer.lastPurchase)) {
+        customer.lastPurchase = commission.date;
+      }
+    });
+    
+    setCustomers(Object.values(customerMap));
+  }, [commissions]);
+
+  const handleMonthChange = useCallback(async (year: number, month: number) => {
     setIsLoading(true);
-
-    try {
-      // Format date range for filtering
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString();
-      const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59).toISOString();
-
-      let query = supabase
-        .from('promo_code_sales')
-        .select('*')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-      
-      // If user is not admin, filter by their affiliate code
-      if (!isAdmin) {
-        const { data: affiliateData } = await supabase
-          .from('affiliates')
-          .select('affiliate_code')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
-          
-        if (affiliateData?.affiliate_code) {
-          query = query.eq('promo_code_name', affiliateData.affiliate_code);
-        }
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data) {
-        // Process the data to group by customer
-        const customerMap: Record<string, CustomerData> = {};
-        
-        data.forEach(sale => {
-          if (!sale.customer_email) return;
-          
-          if (!customerMap[sale.customer_email]) {
-            customerMap[sale.customer_email] = {
-              email: sale.customer_email,
-              purchases: 0,
-              revenue: 0,
-              commission: 0,
-              lastPurchase: sale.created_at
-            };
-          }
-          
-          const customer = customerMap[sale.customer_email];
-          customer.purchases += 1;
-          customer.revenue += Number(sale.amount_paid) || 0;
-          customer.commission += Number(sale.affiliate_commission) || 0;
-          
-          // Update last purchase date if newer
-          if (new Date(sale.created_at) > new Date(customer.lastPurchase)) {
-            customer.lastPurchase = sale.created_at;
-          }
-        });
-        
-        setCustomers(Object.values(customerMap));
-      } else {
-        setCustomers([]);
-      }
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-      toast.error("Failed to load customer data");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchCustomers();
-    }
-  }, [isAuthenticated, selectedYear, selectedMonth]);
-
-  const handleMonthChange = (year: number, month: number) => {
     setSelectedYear(year);
     setSelectedMonth(month);
-  };
+    
+    if (user?.affiliateCode) {
+      try {
+        await fetchCommissionData(year, month, false);
+      } catch (error) {
+        console.error("Error fetching customer data:", error);
+        toast.error("Failed to load customer data");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
+    }
+  }, [user?.affiliateCode, fetchCommissionData]);
+
+  useEffect(() => {
+    if (user?.affiliateCode) {
+      handleMonthChange(selectedYear, selectedMonth);
+    }
+  }, [user?.affiliateCode]);
+
+  useEffect(() => {
+    processCustomerData();
+    setIsLoading(false);
+  }, [processCustomerData]);
 
   const filteredCustomers = customers.filter(customer =>
     customer.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -165,7 +142,7 @@ export default function Customers() {
                 Manage and view details about your referred customers.
               </p>
             </div>
-            <MonthPicker onMonthChange={handleMonthChange} />
+            <MonthPicker onMonthChange={handleMonthChange} isLoading={isLoading} />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">

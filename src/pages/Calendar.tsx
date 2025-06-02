@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,10 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addMonths, subMonths } from "date-fns";
 import { useAffiliate } from "@/contexts/AffiliateContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Calendar() {
+  const { user } = useAuth();
+  const { commissions, fetchCommissionData } = useAffiliate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const { commissions } = useAffiliate();
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch data for the current month when component mounts
+  useEffect(() => {
+    if (user?.affiliateCode) {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      setIsLoading(true);
+      fetchCommissionData(year, month, false).finally(() => setIsLoading(false));
+    }
+  }, [user?.affiliateCode, currentMonth, fetchCommissionData]);
 
   // Generate dates with events
   const datesWithEvents = commissions.reduce((acc: Record<string, number>, commission) => {
@@ -18,13 +32,13 @@ export default function Calendar() {
     return acc;
   }, {});
 
-  const nextMonth = () => {
+  const nextMonth = useCallback(() => {
     setCurrentMonth(addMonths(currentMonth, 1));
-  };
+  }, [currentMonth]);
 
-  const prevMonth = () => {
+  const prevMonth = useCallback(() => {
     setCurrentMonth(subMonths(currentMonth, 1));
-  };
+  }, [currentMonth]);
 
   // Generate calendar days
   const generateCalendarDays = () => {
@@ -52,6 +66,7 @@ export default function Calendar() {
       const date = new Date(year, month, day);
       const dateString = date.toISOString().split('T')[0];
       const hasEvents = datesWithEvents[dateString] > 0;
+      const eventCount = datesWithEvents[dateString] || 0;
       
       days.push(
         <div 
@@ -62,7 +77,7 @@ export default function Calendar() {
           {hasEvents && (
             <div className="absolute bottom-2 right-2">
               <div className="bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {datesWithEvents[dateString]}
+                {eventCount}
               </div>
             </div>
           )}
@@ -82,14 +97,14 @@ export default function Calendar() {
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-semibold tracking-tight">Calendar</h1>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="icon" onClick={prevMonth}>
+              <Button variant="outline" size="icon" onClick={prevMonth} disabled={isLoading}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="flex items-center">
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 <span>{format(currentMonth, "MMMM yyyy")}</span>
               </div>
-              <Button variant="outline" size="icon" onClick={nextMonth}>
+              <Button variant="outline" size="icon" onClick={nextMonth} disabled={isLoading}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -100,28 +115,35 @@ export default function Calendar() {
               <CardTitle>Commission Events</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="calendar-container">
-                <div className="grid grid-cols-7 gap-px">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <div key={day} className="h-10 flex items-center justify-center font-medium">
-                      {day}
-                    </div>
-                  ))}
-                  {generateCalendarDays()}
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+                  <p className="mt-2 text-sm text-muted-foreground">Loading calendar data...</p>
                 </div>
-              </div>
+              ) : (
+                <div className="calendar-container">
+                  <div className="grid grid-cols-7 gap-px">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                      <div key={day} className="h-10 flex items-center justify-center font-medium">
+                        {day}
+                      </div>
+                    ))}
+                    {generateCalendarDays()}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Upcoming Events</CardTitle>
+              <CardTitle>Recent Events</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {commissions.length > 0 ? (
                   commissions
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 5)
                     .map((commission, index) => (
                       <div key={index} className="flex items-center justify-between border-b pb-2">
@@ -138,7 +160,7 @@ export default function Calendar() {
                       </div>
                     ))
                 ) : (
-                  <p className="text-muted-foreground">No upcoming events</p>
+                  <p className="text-muted-foreground">No recent events</p>
                 )}
               </div>
             </CardContent>

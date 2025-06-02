@@ -219,6 +219,7 @@ export default function Dashboard() {
             description="Share this code with your audience"
             icon={<Calendar className="w-4 h-4" />}
             className="bg-secondary/10"
+            showCopyButton={true}
           />
         </div>
 

@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { MonthPicker } from "@/components/MonthPicker";
@@ -9,18 +11,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 export default function Analytics() {
+  const { user } = useAuth();
   const { fetchCommissionData, commissions } = useAffiliate();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    fetchCommissionData(selectedYear, selectedMonth);
-  }, [fetchCommissionData, selectedYear, selectedMonth]);
-
-  const handleMonthChange = (year: number, month: number) => {
+  const handleMonthChange = useCallback(async (year: number, month: number) => {
+    setIsLoading(true);
     setSelectedYear(year);
     setSelectedMonth(month);
-  };
+    
+    if (user?.affiliateCode) {
+      try {
+        await fetchCommissionData(year, month, false);
+      } catch (error) {
+        console.error("Error fetching analytics data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
+    }
+  }, [user?.affiliateCode, fetchCommissionData]);
+
+  useEffect(() => {
+    if (user?.affiliateCode) {
+      handleMonthChange(selectedYear, selectedMonth);
+    }
+  }, [user?.affiliateCode]);
 
   // Calculate product distribution
   const productData = commissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
@@ -74,7 +93,7 @@ export default function Analytics() {
                 Detailed view of your affiliate performance.
               </p>
             </div>
-            <MonthPicker onMonthChange={handleMonthChange} />
+            <MonthPicker onMonthChange={handleMonthChange} isLoading={isLoading} />
           </div>
 
           <Tabs defaultValue="overview" className="space-y-4">
