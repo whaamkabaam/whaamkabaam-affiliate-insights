@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -163,6 +164,15 @@ serve(async (req) => {
           console.log(`- Discounts array:`, JSON.stringify(session.discounts, null, 2));
           console.log(`- Line items:`, JSON.stringify(session.line_items, null, 2));
         }
+
+        // CRITICAL FIX: Only process sessions that are actually paid
+        if (session.payment_status !== "paid") {
+          console.log(`Skipping session ${session.id} for customer ${customerEmail} due to payment_status: ${session.payment_status} (Overall status: ${session.status})`);
+          if (isProblematicSession) {
+            console.log(`🔍 PROBLEMATIC - SKIPPED due to payment_status: ${session.payment_status}, session status: ${session.status}`);
+          }
+          continue; // Skip to the next session if not paid
+        }
         
         // Check if session has affiliate discount
         let stripePromotionCodeId = null;
@@ -206,6 +216,7 @@ serve(async (req) => {
             console.log(`🔍 PROBLEMATIC - - No promotion code: ${!stripePromotionCodeId}`);
             console.log(`🔍 PROBLEMATIC - - Correct product: ${actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID}`);
             console.log(`🔍 PROBLEMATIC - - After start date: ${sessionDate >= AYOUB_START_DATE}`);
+            console.log(`🔍 PROBLEMATIC - - Session is PAID: ${session.payment_status === "paid"}`);
           }
           console.log(`AYOUB SPECIAL CASE: Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
           affiliateCode = AYOUB_AFFILIATE_CODE;
@@ -363,7 +374,7 @@ serve(async (req) => {
       .from('promo_code_sales')
       .delete()
       .gte('created_at', startDate.toISOString())
-      .lt('created_at', new Date(parseInt(year), parseInt(month), 1).toISOString());
+      .lte('created_at', endDate.toISOString()); // Fixed: Use lte with endDate for proper month coverage
 
     if (deleteError) {
       console.error('Error deleting existing records:', deleteError);
