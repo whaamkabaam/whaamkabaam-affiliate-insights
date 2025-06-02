@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const emailLower = email.toLowerCase();
     const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
       'admin@whaamkabaam.com': { affiliateCode: 'admin', role: 'admin', name: 'Admin' },
-      'nic@whaamkabaam.com': { affiliateCode: 'promo_1QyefCCgyJ2z2jNZEZv16p7s', role: 'affiliate', name: 'Nic' },
+      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' },
       'maru@whaamkabaam.com': { affiliateCode: 'maru', role: 'affiliate', name: 'Maru' },
       'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' }
     };

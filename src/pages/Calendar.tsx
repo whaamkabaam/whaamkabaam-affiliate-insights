@@ -94,14 +94,14 @@ export default function Calendar() {
             isDayToday && "ring-2 ring-primary/50 bg-primary/5",
             isSelected && "bg-primary/10 border-primary/60 shadow-lg",
             isHovered && "bg-primary/5",
-            hasEvents && "bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950/20 dark:to-blue-950/20"
+            hasEvents && "bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20"
           )}
           onClick={() => setSelectedDate(day)}
           onMouseEnter={() => setHoveredDate(day)}
           onMouseLeave={() => setHoveredDate(null)}
         >
           <div className={cn(
-            "font-medium text-sm mb-1 transition-colors",
+            "font-medium text-sm mb-2 transition-colors",
             !isCurrentMonth && "text-muted-foreground",
             isDayToday && "text-primary font-bold",
             isSelected && "text-primary"
@@ -110,37 +110,34 @@ export default function Calendar() {
           </div>
           
           {hasEvents && (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Badge 
                 variant="secondary" 
                 className={cn(
-                  "text-xs px-1.5 py-0.5 bg-primary/10 text-primary border-primary/20",
-                  "group-hover:bg-primary/20 transition-colors animate-pulse"
+                  "text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 border-emerald-200",
+                  "dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
+                  "group-hover:scale-105 transition-transform duration-200"
                 )}
               >
                 <Sparkles className="w-3 h-3 mr-1" />
                 {dayEvents.count} sale{dayEvents.count > 1 ? 's' : ''}
               </Badge>
               
-              <div className="text-xs space-y-0.5">
-                <div className="flex items-center text-green-600 dark:text-green-400">
-                  <DollarSign className="w-3 h-3 mr-1" />
-                  ${dayEvents.totalCommission.toFixed(2)}
-                </div>
-                <div className="text-muted-foreground">
-                  ${dayEvents.totalAmount.toFixed(2)} total
+              <div className="text-center">
+                <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  +${dayEvents.totalCommission.toFixed(2)}
                 </div>
               </div>
               
               {(isHovered || isSelected) && (
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/10 rounded pointer-events-none animate-fade-in" />
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-100/50 to-green-100/50 dark:from-emerald-900/20 dark:to-green-900/20 rounded pointer-events-none animate-pulse" />
               )}
             </div>
           )}
           
           {isDayToday && (
             <div className="absolute top-1 right-1">
-              <Star className="w-4 h-4 text-primary fill-primary/20" />
+              <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
             </div>
           )}
         </div>
@@ -248,14 +245,14 @@ export default function Calendar() {
                             {selectedDateEvents.length} commission{selectedDateEvents.length > 1 ? 's' : ''}
                           </Badge>
                           <div className="text-sm font-medium text-primary">
-                            ${selectedDateEvents.reduce((sum, e) => sum + e.commission, 0).toFixed(2)}
+                            +${selectedDateEvents.reduce((sum, e) => sum + e.commission, 0).toFixed(2)}
                           </div>
                         </div>
                         <div className="space-y-2 max-h-48 overflow-y-auto">
                           {selectedDateEvents.map((commission, index) => (
                             <div key={index} className="p-3 bg-background/50 rounded-lg border border-primary/10">
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-medium">${commission.commission.toFixed(2)}</span>
+                                <span className="text-sm font-medium">+${commission.commission.toFixed(2)}</span>
                                 <span className="text-xs text-muted-foreground">
                                   {format(new Date(commission.date), "HH:mm")}
                                 </span>
@@ -292,12 +289,12 @@ export default function Calendar() {
                             <div>
                               <p className="font-medium">{format(new Date(commission.date), "MMM d")}</p>
                               <p className="text-sm text-muted-foreground">
-                                +${commission.commission.toFixed(2)} from {censorEmail(commission.customerEmail)}
+                                from {censorEmail(commission.customerEmail)}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium text-green-600">${commission.amount.toFixed(2)}</p>
-                              <p className="text-xs text-muted-foreground">Total Sale</p>
+                              <p className="font-medium text-emerald-600">+${commission.commission.toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground">Commission</p>
                             </div>
                           </div>
                         ))
