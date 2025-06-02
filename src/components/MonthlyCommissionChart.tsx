@@ -43,7 +43,7 @@ export function MonthlyCommissionChart() {
           
           // Calculate date range for this month
           const startDate = new Date(currentYear, month - 1, 1).toISOString();
-          const endDate = new Date(currentYear, month, 0, 23, 59, 59).toISOString();
+          const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();
           
           // For Ayoub, filter out commissions before May 20, 2025
           let dateFilter = `gte.${startDate}`;
