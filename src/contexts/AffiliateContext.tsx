@@ -3,15 +3,20 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { AffiliateOverview } from "@/types/supabase";
 import { toast } from "sonner";
+import { useAffiliateData } from "@/hooks/useAffiliateData";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AffiliateContextType {
   summary: any;
   data: any[];
+  commissions: any[];
   isLoading: boolean;
   error: string | null;
   selectedPeriod: { year: number; month: number };
   affiliateOverviews: AffiliateOverview[];
+  isAdmin: boolean;
   fetchData: (affiliateCode: string, year: number, month: number) => Promise<void>;
+  fetchCommissionData: (year: number, month: number, forceRefresh?: boolean) => Promise<void>;
   setSelectedPeriod: (period: { year: number; month: number }) => void;
   fetchAffiliateOverviews: () => Promise<void>;
 }
@@ -19,87 +24,37 @@ interface AffiliateContextType {
 const AffiliateContext = createContext<AffiliateContextType | undefined>(undefined);
 
 export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
-  const [summary, setSummary] = useState(null);
-  const [data, setData] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState({ year: 0, month: 0 });
-  const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
+  
+  // Use the custom hook for affiliate data management
+  const {
+    commissions,
+    isLoading,
+    error,
+    summary,
+    affiliateOverviews,
+    fetchCommissionData,
+    fetchAffiliateOverviews
+  } = useAffiliateData(isAuthenticated, isAdmin, user);
 
+  // Legacy fetchData method for backward compatibility
   const fetchData = async (affiliateCode: string, year: number, month: number) => {
-    console.log(`Fetching data for ${affiliateCode}, year: ${year}, month: ${month}, shouldSync: true`);
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log("Syncing from Stripe...");
-      const { data: syncResult, error: syncError } = await supabase.functions.invoke("get-affiliate-data", {
-        body: { 
-          affiliateCode,
-          year: year.toString(),
-          month: month.toString(),
-          forceRefresh: true
-        }
-      });
-
-      if (syncError) {
-        console.error("Sync error:", syncError);
-        throw syncError;
-      }
-
-      console.log("Sync completed, result:", syncResult);
-      setSummary(syncResult?.summary || null);
-      setData(syncResult?.data || []);
-      
-    } catch (err: any) {
-      console.error("Error in fetchData:", err);
-      setError(err.message || "Failed to fetch data");
-      toast.error(`Failed to fetch data: ${err.message || "Unknown error"}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchAffiliateOverviews = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('admin_get_affiliates');
-      
-      if (error) {
-        console.error("Error fetching affiliate overviews:", error);
-        toast.error(`Failed to fetch affiliate data: ${error.message}`);
-        return;
-      }
-      
-      if (data) {
-        const overviews = data.map((item: any) => ({
-          email: item.email,
-          affiliateCode: item.affiliate_code,
-          commissionRate: item.commission_rate,
-          totalCommission: item.total_commission || 0,
-          totalSales: item.total_sales || 0,
-          customerCount: item.customer_count || 0
-        }));
-        
-        setAffiliateOverviews(overviews);
-        console.log("Fetched affiliate overviews:", overviews);
-      }
-    } catch (err: any) {
-      console.error("Error fetching affiliate overviews:", err);
-      toast.error("Failed to fetch affiliate overviews");
-    } finally {
-      setIsLoading(false);
-    }
+    console.log(`Legacy fetchData called for ${affiliateCode}, year: ${year}, month: ${month}`);
+    await fetchCommissionData(year, month, true);
   };
 
   const value = {
     summary,
-    data,
+    data: commissions, // Map commissions to data for backward compatibility
+    commissions,
     isLoading,
     error,
     selectedPeriod,
     affiliateOverviews,
+    isAdmin,
     fetchData,
+    fetchCommissionData,
     setSelectedPeriod,
     fetchAffiliateOverviews
   };
