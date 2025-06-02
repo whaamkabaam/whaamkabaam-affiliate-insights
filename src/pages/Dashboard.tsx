@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +9,7 @@ import { CommissionTable } from "@/components/CommissionTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/MonthPicker";
-import { DollarSign, Users, TrendingUp, Calendar, Loader2, AlertCircle } from "lucide-react";
+import { DollarSign, Users, TrendingUp, Calendar, Loader2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -106,9 +105,26 @@ export default function Dashboard() {
 
   const getDateRangeDescription = () => {
     if (selectedYear === 0 && selectedMonth === 0) {
-      return "All time";
+      return "All time overview";
     }
     return new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+  };
+
+  const getViewTypeIndicator = () => {
+    if (selectedYear === 0 && selectedMonth === 0) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/10 px-3 py-1 rounded-full">
+          <Clock className="w-4 h-4" />
+          All Time View
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-500/10 px-3 py-1 rounded-full">
+        <Calendar className="w-4 h-4" />
+        Monthly View
+      </div>
+    );
   };
 
   const renderDashboardContent = () => {
@@ -234,11 +250,16 @@ export default function Dashboard() {
         <DashboardHeader />
         <main className="flex-1 p-4 md:p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight">Welcome, {user?.name || 'Affiliate'}</h1>
-              <p className="text-muted-foreground">
-                Here's what's happening with your affiliate account today.
-              </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight">Welcome, {user?.name || 'Affiliate'}</h1>
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="text-muted-foreground">
+                    Here's what's happening with your affiliate account today.
+                  </p>
+                  {getViewTypeIndicator()}
+                </div>
+              </div>
             </div>
             <MonthPicker 
               onMonthChange={handleMonthChange}

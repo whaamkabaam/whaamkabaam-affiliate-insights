@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Calendar, Clock } from "lucide-react";
 
 interface MonthPickerProps {
   onMonthChange: (year: number, month: number) => void;
@@ -9,8 +10,9 @@ interface MonthPickerProps {
 
 export function MonthPicker({ onMonthChange }: MonthPickerProps) {
   const currentDate = new Date();
-  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
+  // Start with all-time view (0, 0)
+  const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [selectedMonth, setSelectedMonth] = useState<number>(0);
 
   const years = Array.from(
     { length: 5 },
@@ -26,15 +28,55 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
     onMonthChange(selectedYear, selectedMonth);
   }, [selectedYear, selectedMonth, onMonthChange]);
 
+  const handleAllTimeClick = () => {
+    setSelectedYear(0);
+    setSelectedMonth(0);
+  };
+
+  const handleCurrentMonthClick = () => {
+    setSelectedMonth(currentDate.getMonth() + 1);
+    setSelectedYear(currentDate.getFullYear());
+  };
+
+  const isAllTime = selectedYear === 0 && selectedMonth === 0;
+  const isCurrentMonth = selectedYear === currentDate.getFullYear() && 
+                        selectedMonth === currentDate.getMonth() + 1;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center">
+      <Button 
+        variant={isAllTime ? "default" : "outline"} 
+        size="sm"
+        onClick={handleAllTimeClick}
+        className="flex items-center gap-2"
+      >
+        <Clock className="w-4 h-4" />
+        All Time
+      </Button>
+      
+      <Button 
+        variant={isCurrentMonth ? "default" : "outline"} 
+        size="sm"
+        onClick={handleCurrentMonthClick}
+        className="flex items-center gap-2"
+      >
+        <Calendar className="w-4 h-4" />
+        Current Month
+      </Button>
+
+      <div className="flex items-center gap-2">
         <Select
           value={selectedMonth.toString()}
-          onValueChange={(value) => setSelectedMonth(parseInt(value))}
+          onValueChange={(value) => {
+            const month = parseInt(value);
+            setSelectedMonth(month);
+            if (month > 0 && selectedYear === 0) {
+              setSelectedYear(currentDate.getFullYear());
+            }
+          }}
         >
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Month" />
+            <SelectValue placeholder="Select Month" />
           </SelectTrigger>
           <SelectContent>
             {monthNames.map((month, index) => (
@@ -44,12 +86,16 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
             ))}
           </SelectContent>
         </Select>
-      </div>
 
-      <div className="flex items-center">
         <Select
           value={selectedYear.toString()}
-          onValueChange={(value) => setSelectedYear(parseInt(value))}
+          onValueChange={(value) => {
+            const year = parseInt(value);
+            setSelectedYear(year);
+            if (selectedMonth === 0) {
+              setSelectedMonth(currentDate.getMonth() + 1);
+            }
+          }}
         >
           <SelectTrigger className="w-[100px]">
             <SelectValue placeholder="Year" />
@@ -63,17 +109,6 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
           </SelectContent>
         </Select>
       </div>
-
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={() => {
-          setSelectedMonth(currentDate.getMonth() + 1);
-          setSelectedYear(currentDate.getFullYear());
-        }}
-      >
-        Current Month
-      </Button>
     </div>
   );
 }
