@@ -19,7 +19,7 @@ interface CommissionTableProps {
 }
 
 export function CommissionTable({ limit }: CommissionTableProps) {
-  const { transactions, isLoading, error } = useAffiliate();
+  const { commissions, isLoading, error } = useAffiliate();
   const { user } = useAuth();
 
   if (isLoading) {
@@ -58,7 +58,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
     );
   }
 
-  if (!transactions || transactions.length === 0) {
+  if (!commissions || commissions.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -74,7 +74,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
     );
   }
 
-  const displayTransactions = limit ? transactions.slice(0, limit) : transactions;
+  const displayTransactions = limit ? commissions.slice(0, limit) : commissions;
 
   return (
     <Card>
@@ -100,22 +100,22 @@ export function CommissionTable({ limit }: CommissionTableProps) {
               {displayTransactions.map((transaction, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">
-                    {new Date(transaction.created_at).toLocaleDateString()}
+                    {new Date(transaction.date).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
                     <div className="max-w-[200px] truncate">
-                      {transaction.customer_email}
+                      {transaction.customerEmail}
                     </div>
                   </TableCell>
                   <TableCell>
                     <ProductBadge 
-                      productId={transaction.product_id} 
+                      productId={transaction.productId} 
                       size="sm"
                     />
                   </TableCell>
-                  <TableCell>${transaction.amount_total?.toFixed(2) || '0.00'}</TableCell>
+                  <TableCell>${transaction.amount?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell className="font-semibold text-green-600">
-                    ${transaction.affiliate_commission?.toFixed(2) || '0.00'}
+                    ${transaction.commission?.toFixed(2) || '0.00'}
                   </TableCell>
                 </TableRow>
               ))}
@@ -123,6 +123,6 @@ export function CommissionTable({ limit }: CommissionTableProps) {
           </Table>
         </div>
       </CardContent>
-    </Card>
-  );
+    );
+  }
 }
