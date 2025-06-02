@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { User } from "@supabase/supabase-js";
 
 interface UserRecord {
   id: string;
@@ -56,8 +57,19 @@ export const UserManagement = () => {
       }
       
       if (data?.users) {
-        setUsers(data.users);
-        toast.success(`Retrieved ${data.users.length} users`);
+        // Convert User[] to UserRecord[] with proper type handling
+        const userRecords: UserRecord[] = data.users
+          .filter((user: User) => user.email) // Filter out users without email
+          .map((user: User) => ({
+            id: user.id,
+            email: user.email!, // We know it's defined due to filter above
+            created_at: user.created_at,
+            user_metadata: user.user_metadata || {},
+            email_confirmed_at: user.email_confirmed_at
+          }));
+        
+        setUsers(userRecords);
+        toast.success(`Retrieved ${userRecords.length} users`);
       }
     } catch (error) {
       console.error("Error calling admin users:", error);
