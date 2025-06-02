@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [dataRefreshing, setDataRefreshing] = useState(false);
+  const [monthSwitching, setMonthSwitching] = useState(false);
   const [initialDataFetched, setInitialDataFetched] = useState(false);
   const navigate = useNavigate();
 
@@ -27,6 +29,7 @@ export default function Dashboard() {
   console.log("Dashboard render - Auth loading:", authIsLoading, "User:", user?.email, "Is admin:", isAdmin);
   console.log("Dashboard render - Affiliate loading:", affiliateIsLoading, "Has summary:", !!summary, "Error:", error);
   console.log("Dashboard render - User affiliate code:", user?.affiliateCode);
+  console.log("Dashboard render - Selected period:", selectedYear, selectedMonth);
 
   // Redirect admin users to admin dashboard
   useEffect(() => {
@@ -37,17 +40,30 @@ export default function Dashboard() {
   }, [authIsLoading, isAdmin, navigate]);
 
   // Memoized month change handler to prevent unnecessary re-renders
-  const handleMonthChange = useCallback((year: number, month: number) => {
+  const handleMonthChange = useCallback(async (year: number, month: number) => {
     console.log("Month changed to:", year, month);
     // Only update if actually different
     if (year !== selectedYear || month !== selectedMonth) {
+      setMonthSwitching(true);
       setSelectedYear(year);
       setSelectedMonth(month);
-      setInitialDataFetched(false); // Reset to allow new fetch
+      
+      // Fetch new data for the selected period
+      if (user?.affiliateCode && !isAdmin) {
+        try {
+          await fetchCommissionData(year, month, false);
+        } catch (error) {
+          console.error("Error fetching data for new period:", error);
+        } finally {
+          setMonthSwitching(false);
+        }
+      } else {
+        setMonthSwitching(false);
+      }
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.affiliateCode, isAdmin, fetchCommissionData]);
 
-  // Single effect for data fetching with proper dependencies
+  // Single effect for initial data fetching
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
@@ -62,21 +78,21 @@ export default function Dashboard() {
 
     // Only proceed if we have a user with an affiliate code and haven't fetched initial data
     if (user?.affiliateCode && !affiliateIsLoading && !initialDataFetched) {
-      console.log("Fetching commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
+      console.log("Fetching initial commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
       setInitialDataFetched(true);
       
       fetchCommissionData(selectedYear, selectedMonth, false)
         .then(() => {
-          console.log("Commission data fetch completed successfully");
+          console.log("Initial commission data fetch completed successfully");
         })
         .catch((err) => {
-          console.error("Commission data fetch failed:", err);
+          console.error("Initial commission data fetch failed:", err);
           setInitialDataFetched(false); // Allow retry on error
         });
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, selectedYear, selectedMonth, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, initialDataFetched]);
+  }, [user?.affiliateCode, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, initialDataFetched, selectedYear, selectedMonth]);
 
   // Handle error display
   useEffect(() => {
@@ -127,6 +143,8 @@ export default function Dashboard() {
     );
   };
 
+  const isDataLoading = affiliateIsLoading || monthSwitching;
+
   const renderDashboardContent = () => {
     console.log("Rendering dashboard content - conditions check:");
     console.log("- authIsLoading:", authIsLoading);
@@ -161,7 +179,7 @@ export default function Dashboard() {
       );
     }
     
-    if (affiliateIsLoading && !summary) {
+    if (affiliateIsLoading && !summary && !initialDataFetched) {
       console.log("Showing affiliate data loading screen");
       return (
         <div className="flex items-center justify-center p-8">
@@ -182,16 +200,18 @@ export default function Dashboard() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <StatsCard
             title="Total Commission"
-            value={`$${summary.totalCommission.toFixed(2)}`}
+            value={isDataLoading ? "Loading..." : `$${summary.totalCommission.toFixed(2)}`}
             description={getDateRangeDescription()}
-            icon={<DollarSign className="w-4 h-4" />}
+            icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
             className="bg-primary/5"
+            isLoading={isDataLoading}
           />
           <StatsCard
             title="New Customers"
-            value={summary.customerCount}
+            value={isDataLoading ? "Loading..." : summary.customerCount}
             description="People who used your affiliate code"
-            icon={<Users className="w-4 h-4" />}
+            icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+            isLoading={isDataLoading}
           />
           <StatsCard
             title="Your Code"
@@ -209,14 +229,14 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
-            {dataRefreshing && (
+            {(dataRefreshing || monthSwitching) && (
               <div className="flex items-center text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing data...
+                {monthSwitching ? 'Loading period data...' : 'Refreshing data...'}
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing || !user?.affiliateCode}>
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing || monthSwitching || !user?.affiliateCode}>
                 {dataRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Button variant="outline" size="sm" disabled={!user?.affiliateCode}>
@@ -263,6 +283,7 @@ export default function Dashboard() {
             </div>
             <MonthPicker 
               onMonthChange={handleMonthChange}
+              isLoading={monthSwitching}
             />
           </div>
 
