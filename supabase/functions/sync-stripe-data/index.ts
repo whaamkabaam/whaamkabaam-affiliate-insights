@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -22,12 +23,13 @@ serve(async (req) => {
     "promo_1QccV9CgyJ2z2jNZMLVi7Lv7"
   ];
   const AYOUB_START_DATE = new Date("2025-05-20T00:00:00Z");
+  const OTHER_AFFILIATES_START_DATE = new Date("2025-03-01T00:00:00Z");
 
   try {
     const requestData = await req.json();
-    const { year, month, forceRefresh = false } = requestData;
+    const { year, month, forceRefresh = false, affiliateCode = null } = requestData;
 
-    console.log(`Syncing Stripe data for ${year}-${month}, forceRefresh: ${forceRefresh}`);
+    console.log(`Syncing Stripe data for ${year}-${month}, forceRefresh: ${forceRefresh}, affiliateCode: ${affiliateCode}`);
 
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) {
@@ -39,22 +41,44 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // FIXED: Calculate Unix timestamps for the date range with proper handling
+    // ENHANCED: Calculate Unix timestamps with affiliate-specific minimum dates
     let startTimestamp, endTimestamp;
     let startDate, endDate;
     
     if (year === 0 && month === 0) {
-      // For "All Time" - fetch from a reasonable start date to NOW (not future)
-      const fiveYearsAgo = new Date();
-      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-      startDate = fiveYearsAgo;
+      // For "All Time" - use affiliate-specific start dates
+      if (affiliateCode === AYOUB_AFFILIATE_CODE) {
+        startDate = AYOUB_START_DATE;
+        console.log(`Using Ayoub-specific start date: ${startDate.toISOString()}`);
+      } else if (affiliateCode && affiliateCode !== 'admin') {
+        startDate = OTHER_AFFILIATES_START_DATE;
+        console.log(`Using other affiliate start date for ${affiliateCode}: ${startDate.toISOString()}`);
+      } else {
+        // For admin or unspecified - use broader range
+        const fiveYearsAgo = new Date();
+        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+        startDate = fiveYearsAgo;
+        console.log(`Using admin/default start date: ${startDate.toISOString()}`);
+      }
       endDate = new Date(); // Current time for latest data
       startTimestamp = Math.floor(startDate.getTime() / 1000);
       endTimestamp = Math.floor(endDate.getTime() / 1000);
       console.log(`Fetching Stripe sessions for "All Time" from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     } else {
-      // For specific month/year - ensure we capture the ENTIRE month
-      startDate = new Date(parseInt(year), parseInt(month) - 1, 1, 0, 0, 0, 0);
+      // For specific month/year - ensure we capture the ENTIRE month but respect affiliate minimums
+      const requestedStartDate = new Date(parseInt(year), parseInt(month) - 1, 1, 0, 0, 0, 0);
+      
+      // Apply affiliate-specific minimum dates
+      if (affiliateCode === AYOUB_AFFILIATE_CODE) {
+        startDate = new Date(Math.max(requestedStartDate.getTime(), AYOUB_START_DATE.getTime()));
+        console.log(`Ayoub-specific: Using start date ${startDate.toISOString()} (max of requested ${requestedStartDate.toISOString()} and Ayoub minimum ${AYOUB_START_DATE.toISOString()})`);
+      } else if (affiliateCode && affiliateCode !== 'admin') {
+        startDate = new Date(Math.max(requestedStartDate.getTime(), OTHER_AFFILIATES_START_DATE.getTime()));
+        console.log(`Other affiliate: Using start date ${startDate.toISOString()} (max of requested ${requestedStartDate.toISOString()} and affiliate minimum ${OTHER_AFFILIATES_START_DATE.toISOString()})`);
+      } else {
+        startDate = requestedStartDate;
+        console.log(`Admin/default: Using requested start date ${startDate.toISOString()}`);
+      }
       
       // CRITICAL FIX: For current month, use current time as end date to get latest data
       const currentDate = new Date();
@@ -156,7 +180,7 @@ serve(async (req) => {
         
         // Extract promotion code and affiliate assignment
         let stripePromotionCodeId = null;
-        let affiliateCode = null;
+        let sessionAffiliateCode = null;
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
@@ -180,34 +204,40 @@ serve(async (req) => {
             actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
             sessionDate >= AYOUB_START_DATE) {
           console.log(`AYOUB SPECIAL CASE: Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
-          affiliateCode = AYOUB_AFFILIATE_CODE;
+          sessionAffiliateCode = AYOUB_AFFILIATE_CODE;
           stripePromotionCodeId = "no_discount_ayoub_coaching";
         } else if (stripePromotionCodeId) {
           // Map Stripe promotion code to internal affiliate code
-          affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
-          console.log(`Mapped ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
+          sessionAffiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
+          console.log(`Mapped ${stripePromotionCodeId} to affiliateCode: ${sessionAffiliateCode}`);
+        }
+        
+        // ENHANCED: If we're syncing for a specific affiliate, only process their sessions
+        if (affiliateCode && affiliateCode !== 'admin' && sessionAffiliateCode !== affiliateCode) {
+          console.log(`Skipping session ${session.id} - belongs to ${sessionAffiliateCode}, but syncing for ${affiliateCode}`);
+          continue;
         }
         
         // Skip sessions without affiliate assignment
-        if (!affiliateCode) {
+        if (!sessionAffiliateCode) {
           console.log(`No affiliate assignment for session ${session.id}, skipping`);
           continue;
         }
 
         // DOUBLE CRITICAL CHECK: For Ayoub, absolutely ensure it's the coaching product
-        if (affiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
+        if (sessionAffiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
           console.log(`CRITICAL BLOCK: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
           continue;
         }
 
-        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
+        console.log(`Found affiliate session: ${session.id} -> ${sessionAffiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
         // FIXED: Commission calculation logic - 20% for non-Ayoub, special logic for Ayoub
         const amountPaid = (session.amount_total || 0) / 100;
         const originalAmount = (session.amount_subtotal || session.amount_total || 0) / 100; // Use subtotal (pre-discount) for commission calculation
         let affiliateCommission = 0;
 
-        if (affiliateCode === AYOUB_AFFILIATE_CODE) {
+        if (sessionAffiliateCode === AYOUB_AFFILIATE_CODE) {
           if (sessionDate < AYOUB_START_DATE) {
             console.log(`SyncStripe: Ayoub session ${session.id} is before start date ${AYOUB_START_DATE.toISOString()}, skipping commission.`);
             affiliateCommission = 0;
@@ -240,13 +270,13 @@ serve(async (req) => {
               console.log(`SyncStripe: AYOUB - Session ${session.id} - Product ${actualProductIdInSession} is not the coaching product (${AYOUB_COACHING_PRODUCT_ID}). No commission for Ayoub.`);
             }
           }
-        } else if (affiliateCode) {
+        } else if (sessionAffiliateCode) {
           // FIXED: For other affiliates - calculate commission on ORIGINAL price (pre-discount) at 20%
-          console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
+          console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${sessionAffiliateCode}.`);
           
           const commissionRate = 0.2; // 20% commission rate for all non-Ayoub affiliates
           affiliateCommission = originalAmount * commissionRate;
-          console.log(`SyncStripe: Commission calculation for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} (20%) = $${affiliateCommission.toFixed(2)}`);
+          console.log(`SyncStripe: Commission calculation for ${sessionAffiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} (20%) = $${affiliateCommission.toFixed(2)}`);
         }
 
         const record = {
@@ -255,7 +285,7 @@ serve(async (req) => {
           customer_email: session.customer_details?.email || null,
           amount_paid: amountPaid,
           affiliate_commission: parseFloat(affiliateCommission.toFixed(2)),
-          promo_code_name: affiliateCode,
+          promo_code_name: sessionAffiliateCode,
           promo_code_id: stripePromotionCodeId || "no_discount",
           product_id: actualProductIdInSession,
           product_name: session.line_items?.data?.[0]?.description || null,

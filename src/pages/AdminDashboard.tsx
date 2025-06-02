@@ -151,10 +151,13 @@ export default function AdminDashboard() {
           updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
       
-      // Call the edge function using Supabase client
+      // Call the edge function using Supabase client for admin sync (all affiliates)
       const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
         method: "POST",
-        body: { fullRefresh }
+        body: { 
+          fullRefresh,
+          affiliateCode: 'admin' // Admin syncs all data
+        }
       });
       
       if (error) {
@@ -163,7 +166,7 @@ export default function AdminDashboard() {
       }
       
       if (data) {
-        toast.success(`Stripe data synced: ${data.stats.saved} records processed, ${data.stats.skipped} skipped`);
+        toast.success(`Stripe data synced: ${data.stats?.saved || data.commissionsFound || 0} records processed, ${data.stats?.skipped || 0} skipped`);
       } else {
         toast.warning("Sync completed but no statistics were returned");
       }

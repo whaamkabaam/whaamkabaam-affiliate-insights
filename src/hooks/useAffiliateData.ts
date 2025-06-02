@@ -134,7 +134,8 @@ export const useAffiliateData = (
           body: {
             year,
             month,
-            forceRefresh
+            forceRefresh,
+            affiliateCode: user.affiliateCode
           }
         });
 
