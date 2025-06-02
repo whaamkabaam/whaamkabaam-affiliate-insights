@@ -20,7 +20,10 @@ interface CommissionTableProps {
 
 export function CommissionTable({ limit }: CommissionTableProps) {
   const { commissions, isLoading, error } = useAffiliate();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  
+  // Check if user is a true admin (commission_rate > 0.5) rather than just an affiliate
+  const isAdmin = user?.role === 'admin' && user?.email?.toLowerCase() === 'admin@whaamkabaam.com';
 
   if (isLoading) {
     return (
