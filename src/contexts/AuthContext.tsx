@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Enhanced email-based mapping for known users
+  // Enhanced email-based mapping for known users - ONLY admin@whaamkabaam.com is admin
   const getKnownUserData = (email: string): { affiliateCode: string; role: AppRole; name: string } | null => {
     const emailLower = email.toLowerCase();
     const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
@@ -84,9 +84,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (affiliateData) {
           console.log("AuthContext: Found affiliate data via direct query:", affiliateData);
+          // CRITICAL FIX: Only admin@whaamkabaam.com should be admin
+          const isUserAdmin = currentUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
           const finalUser: UserWithRole = {
             ...currentUser,
-            role: affiliateData.commission_rate >= 0.2 ? 'admin' : 'affiliate',
+            role: isUserAdmin ? 'admin' : 'affiliate',
             affiliateCode: affiliateData.affiliate_code,
             name: currentUser.email?.split('@')[0] || "User"
           };
@@ -138,7 +140,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
             console.log("AuthContext: fetchUserData completed successfully:", detailedUser);
             setUser(detailedUser);
-            setIsAdmin(detailedUser.role === 'admin');
+            // CRITICAL FIX: Only set isAdmin true for admin@whaamkabaam.com
+            const adminStatus = detailedUser.role === 'admin' && detailedUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
+            setIsAdmin(adminStatus);
+            console.log("AuthContext: Setting isAdmin to:", adminStatus, "for user:", detailedUser.email);
           } catch (error) {
             console.error("AuthContext: Error in fetchUserData:", error);
             // Set a robust minimal user
@@ -152,7 +157,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             
             setUser(fallbackUser);
-            setIsAdmin(knownUserData?.role === 'admin' || false);
+            // CRITICAL FIX: Only admin@whaamkabaam.com is admin
+            const adminStatus = knownUserData?.role === 'admin' && newSession.user.email?.toLowerCase() === 'admin@whaamkabaam.com';
+            setIsAdmin(adminStatus);
+            console.log("AuthContext: Fallback setting isAdmin to:", adminStatus, "for user:", newSession.user.email);
           }
         } else {
           console.log("AuthContext: No user in session. Clearing user state.");
