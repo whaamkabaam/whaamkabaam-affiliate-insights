@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [dataRefreshing, setDataRefreshing] = useState(false);
+  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging to track loading states
@@ -37,21 +38,14 @@ export default function Dashboard() {
     }
   }, [authIsLoading, isAdmin, navigate]);
 
-  // Memoized month change handler to prevent unnecessary re-renders
+  // Stable month change handler
   const handleMonthChange = useCallback((year: number, month: number) => {
     console.log("Month changed to:", year, month);
-    // Always update and trigger fetch when month/year changes
     setSelectedYear(year);
     setSelectedMonth(month);
-    
-    // Immediately fetch data for the new period if user is authenticated
-    if (user?.affiliateCode && !isAdmin) {
-      console.log("Fetching data for new period:", year, month);
-      fetchCommissionData(year, month, true); // Force refresh for month changes
-    }
-  }, [user?.affiliateCode, isAdmin, fetchCommissionData]);
+  }, []);
 
-  // Initial data fetch effect
+  // Separate effect for fetching data when period changes
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
@@ -66,19 +60,25 @@ export default function Dashboard() {
 
     // Only proceed if we have a user with an affiliate code
     if (user?.affiliateCode && !affiliateIsLoading) {
-      console.log("Initial fetch for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
+      console.log("Fetching data for period change:", selectedYear, selectedMonth, "Has initially fetched:", hasInitiallyFetched);
       
-      fetchCommissionData(selectedYear, selectedMonth, false)
+      // Force refresh only on the initial load or when explicitly changing periods
+      const shouldForceRefresh = !hasInitiallyFetched;
+      
+      fetchCommissionData(selectedYear, selectedMonth, shouldForceRefresh)
         .then(() => {
-          console.log("Initial commission data fetch completed successfully");
+          console.log("Commission data fetch completed successfully");
+          if (!hasInitiallyFetched) {
+            setHasInitiallyFetched(true);
+          }
         })
         .catch((err) => {
-          console.error("Initial commission data fetch failed:", err);
+          console.error("Commission data fetch failed:", err);
         });
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, selectedYear, selectedMonth]);
+  }, [user?.affiliateCode, authIsLoading, isAdmin, affiliateIsLoading, selectedYear, selectedMonth, hasInitiallyFetched, fetchCommissionData]);
 
   // Handle error display
   useEffect(() => {
