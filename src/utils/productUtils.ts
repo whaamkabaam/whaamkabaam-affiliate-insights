@@ -13,8 +13,9 @@ export const getProductName = (productId: string | null): string => {
 
 export const getProductDisplayVariant = (productName: string): "premium" | "live" | "gradient" | "default" => {
   const name = productName.toLowerCase();
-  if (name.includes("premium")) return "premium";
+  // Live products get the special "live" treatment since they're worth more
   if (name.includes("live")) return "live";
+  if (name.includes("premium")) return "premium";
   if (name.includes("personalized")) return "gradient";
   return "default";
 };

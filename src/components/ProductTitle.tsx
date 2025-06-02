@@ -49,7 +49,7 @@ export function ProductTitle({
   return (
     <Badge 
       className={cn(
-        "inline-flex items-center gap-1 transition-all duration-200 hover:shadow-md",
+        "inline-flex items-center gap-1.5 transition-all duration-200 hover:shadow-md",
         getVariantStyles(),
         getSizeStyles(),
         className
@@ -57,7 +57,7 @@ export function ProductTitle({
       variant="outline"
     >
       {autoVariant === "premium" && <span className="text-amber-900">✨</span>}
-      {autoVariant === "live" && <span className="text-green-900">🔴</span>}
+      {autoVariant === "live" && <span className="text-green-900">💎</span>}
       <span className="whitespace-nowrap">{title}</span>
     </Badge>
   );
