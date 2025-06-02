@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -30,8 +29,10 @@ export default function Calendar() {
     }
   }, [user?.affiliateCode, currentMonth, hasFetched, fetchCommissionData]);
 
-  // Filter commissions to remove example data
+  // Filter commissions to remove example data and apply affiliate-specific filtering
   const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
+  
+  console.log(`Calendar: Total commissions: ${commissions.length}, Filtered: ${filteredCommissions.length}, User: ${user?.affiliateCode}`);
 
   // Generate dates with events using filtered commissions
   const datesWithEvents = filteredCommissions.reduce((acc: Record<string, number>, commission) => {
@@ -170,7 +171,7 @@ export default function Calendar() {
                       </div>
                     ))
                 ) : (
-                  <p className="text-muted-foreground">No commission events this month</p>
+                  <p className="text-muted-foreground">No commission events found</p>
                 )}
               </div>
             </CardContent>

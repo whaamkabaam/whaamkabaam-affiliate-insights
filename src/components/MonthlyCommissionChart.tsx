@@ -53,11 +53,13 @@ export function MonthlyCommissionChart() {
             effectiveFilterStartDate = (new Date(startDate) > new Date(ayoubSpecificMinStartDate)) ? startDate : ayoubSpecificMinStartDate;
           }
           
+          console.log(`Chart: Querying month ${month}, start: ${effectiveFilterStartDate}, end: ${endDate}, affiliate: ${user.affiliateCode}`);
+          
           // Query database directly for this affiliate's commission total for this month
           // Filter out hardcoded examples and $0 commissions
           const { data: monthlyData, error: queryError } = await supabase
             .from('promo_code_sales')
-            .select('affiliate_commission, customer_email')
+            .select('affiliate_commission, customer_email, created_at')
             .eq('promo_code_name', user.affiliateCode)
             .gte('created_at', effectiveFilterStartDate)
             .lte('created_at', endDate)
@@ -75,6 +77,8 @@ export function MonthlyCommissionChart() {
             continue;
           }
           
+          console.log(`Chart: Found ${monthlyData?.length || 0} records for month ${month}`);
+          
           // Calculate total commission for this month from real customers only
           const totalCommission = monthlyData?.reduce((sum, record) => {
             // Double check to filter out any remaining example data
@@ -83,10 +87,13 @@ export function MonthlyCommissionChart() {
                 !record.customer_email.includes('example.com') &&
                 record.customer_email !== 'unknown@example.com' &&
                 record.affiliate_commission > 0) {
+              console.log(`Chart: Including commission $${record.affiliate_commission} from ${record.customer_email} on ${record.created_at}`);
               return sum + (Number(record.affiliate_commission) || 0);
             }
             return sum;
           }, 0) || 0;
+          
+          console.log(`Chart: Total commission for month ${month}: $${totalCommission}`);
           
           if (isMounted) {
             data.push({
@@ -97,6 +104,7 @@ export function MonthlyCommissionChart() {
         }
         
         if (isMounted) {
+          console.log('Chart: Final data:', data);
           setChartData(data);
           setIsLoading(false);
         }

@@ -22,6 +22,7 @@ export const filterCommissions = (commissions: Commission[], affiliateCode?: str
       const ayoubStartDate = new Date('2025-05-20T00:00:00Z');
       const commissionDate = new Date(commission.date);
       if (commissionDate < ayoubStartDate) {
+        console.log(`Filtering out Ayoub commission from ${commissionDate.toISOString()} (before ${ayoubStartDate.toISOString()})`);
         return false;
       }
     }
