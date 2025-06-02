@@ -9,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CommissionTable } from "@/components/CommissionTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { censorEmail } from "@/utils/emailUtils";
 import { filterCommissions } from "@/utils/affiliateUtils";
+import { AlertCircle, TrendingUp } from "lucide-react";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -52,6 +52,9 @@ export default function Analytics() {
   // Filter commissions to remove example data
   const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
 
+  // Check if we have any real data
+  const hasRealData = filteredCommissions.length > 0;
+
   // Calculate product distribution based on actual commission amounts (not sale amounts)
   const productData = filteredCommissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
     const productMap: Record<string, string> = {
@@ -92,6 +95,22 @@ export default function Analytics() {
     parseInt(a.day) - parseInt(b.day)
   );
 
+  // No Data State Component
+  const NoDataState = () => (
+    <div className="flex flex-col items-center justify-center p-12 text-center">
+      <AlertCircle className="w-16 h-16 text-muted-foreground mb-4" />
+      <h3 className="text-xl font-semibold mb-2">No Commission Data Available</h3>
+      <p className="text-muted-foreground mb-4 max-w-md">
+        You don't have any commission data yet. Start promoting with your affiliate code to see analytics here.
+      </p>
+      <div className="bg-muted/50 p-4 rounded-lg">
+        <p className="text-sm text-muted-foreground">
+          Your affiliate code: <span className="font-mono font-semibold">{user?.affiliateCode}</span>
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -108,126 +127,136 @@ export default function Analytics() {
             <MonthPicker onMonthChange={handleMonthChange} isLoading={isLoading} />
           </div>
 
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="products">Product Breakdown</TabsTrigger>
-              <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Daily Commission</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={dailyChartData}
-                        margin={{
-                          top: 5,
-                          right: 30,
-                          left: 20,
-                          bottom: 5,
-                        }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="day" />
-                        <YAxis />
-                        <Tooltip 
-                          formatter={(value) => {
-                            if (typeof value === 'number') {
-                              return `$${value.toFixed(2)}`;
-                            }
-                            return `$${value}`;
+          {!hasRealData ? (
+            <NoDataState />
+          ) : (
+            <Tabs defaultValue="overview" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="products">Product Breakdown</TabsTrigger>
+                <TabsTrigger value="transactions">Transactions</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="overview" className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Daily Commission</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={dailyChartData}
+                          margin={{
+                            top: 5,
+                            right: 30,
+                            left: 20,
+                            bottom: 5,
                           }}
-                          labelFormatter={(label) => `Day ${label}`}
-                        />
-                        <Legend />
-                        <Bar dataKey="amount" fill="#FF3F4E" name="Commission ($)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Commission by Product</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={productChartData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
                         >
-                          {productChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          formatter={(value) => {
-                            if (typeof value === 'number') {
-                              return `$${value.toFixed(2)}`;
-                            }
-                            return `$${value}`;
-                          }}
-                        />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="products" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Product Performance</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-8">
-                    {productChartData.map((product, index) => (
-                      <div key={product.name} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium">{product.name} Plan</div>
-                          <div className="text-sm text-muted-foreground">${product.value.toFixed(2)} Commission</div>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full" 
-                            style={{ 
-                              width: `${(product.value / productChartData.reduce((sum, p) => sum + p.value, 0) * 100).toFixed(0)}%`,
-                              backgroundColor: COLORS[index % COLORS.length]
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="day" />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value) => {
+                              if (typeof value === 'number') {
+                                return `$${value.toFixed(2)}`;
+                              }
+                              return `$${value}`;
+                            }}
+                            labelFormatter={(label) => `Day ${label}`}
+                          />
+                          <Legend />
+                          <Bar dataKey="amount" fill="#FF3F4E" name="Commission ($)" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Commission by Product</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={productChartData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {productChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value) => {
+                              if (typeof value === 'number') {
+                                return `$${value.toFixed(2)}`;
+                              }
+                              return `$${value}`;
                             }}
                           />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="products" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Product Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-8">
+                      {productChartData.length > 0 ? (
+                        productChartData.map((product, index) => (
+                          <div key={product.name} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{product.name} Plan</div>
+                              <div className="text-sm text-muted-foreground">${product.value.toFixed(2)} Commission</div>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full rounded-full" 
+                                style={{ 
+                                  width: `${(product.value / productChartData.reduce((sum, p) => sum + p.value, 0) * 100).toFixed(0)}%`,
+                                  backgroundColor: COLORS[index % COLORS.length]
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No product sales data available yet.
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="transactions">
-              <Card>
-                <CardHeader>
-                  <CardTitle>All Transactions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CommissionTable />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="transactions">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All Transactions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CommissionTable />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
         </main>
       </div>
     </div>
