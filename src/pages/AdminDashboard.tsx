@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, DatabaseIcon } from "lucide-react";
+import { RefreshCw, DatabaseIcon, Users, Copy } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,6 +24,12 @@ interface StripeSyncProgress {
   progress: number;
 }
 
+interface UserCredential {
+  email: string;
+  name: string;
+  password: string;
+}
+
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
   const { affiliateOverviews, isLoading, fetchAffiliateOverviews, error } = useAffiliate();
@@ -33,6 +39,8 @@ export default function AdminDashboard() {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
   const [progressPolling, setProgressPolling] = useState<NodeJS.Timeout | null>(null);
+  const [userCredentials, setUserCredentials] = useState<UserCredential[]>([]);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -183,6 +191,39 @@ export default function AdminDashboard() {
     }
   };
 
+  const getUserCredentials = async () => {
+    setLoadingCredentials(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("setup-initial-users", {
+        method: "POST",
+        body: { user: user }
+      });
+      
+      if (error) {
+        console.error("Error getting credentials:", error);
+        toast.error("Failed to get user credentials");
+        return;
+      }
+      
+      if (data && data.users) {
+        setUserCredentials(data.users);
+        toast.success("User credentials retrieved successfully");
+      } else {
+        toast.info("No new users were created - they may already exist");
+      }
+    } catch (error) {
+      console.error("Error calling setup function:", error);
+      toast.error("Failed to retrieve credentials");
+    } finally {
+      setLoadingCredentials(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
+  };
+
   return (
     <div className="flex min-h-screen bg-muted/40">
       <Sidebar />
@@ -203,7 +244,49 @@ export default function AdminDashboard() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2" />
+                  User Credentials
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <Button 
+                    onClick={getUserCredentials}
+                    disabled={loadingCredentials}
+                    className="w-full"
+                  >
+                    {loadingCredentials ? "Loading..." : "Get User Credentials"}
+                  </Button>
+                  
+                  {userCredentials.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Generated User Credentials:</h4>
+                      {userCredentials.map((cred, index) => (
+                        <div key={index} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">{cred.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(`Email: ${cred.email}\nPassword: ${cred.password}`)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div>Email: {cred.email}</div>
+                            <div>Password: {cred.password}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             
             <Card className="w-full">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
