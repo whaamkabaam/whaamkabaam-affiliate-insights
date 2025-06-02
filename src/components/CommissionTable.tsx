@@ -98,7 +98,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="text-xs">
-                      {commission.productName || "Unknown Product"}
+                      {commission.productId || "Unknown Product"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-bold text-green-600">
