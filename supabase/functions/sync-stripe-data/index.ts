@@ -49,43 +49,8 @@ serve(async (req) => {
     console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
 
-    // For Ayoub, always force refresh to clean up incorrect data
-    let shouldSync = forceRefresh;
-    
-    if (!shouldSync) {
-      // Check when we last synced this period
-      const { data: lastSync } = await supabaseClient
-        .from('system_settings')
-        .select('value, updated_at')
-        .eq('key', `stripe_sync_${year}_${month}`)
-        .single();
-
-      if (!lastSync) {
-        shouldSync = true;
-        console.log("No previous sync found, will sync");
-      } else {
-        const lastSyncTime = new Date(lastSync.updated_at);
-        const hoursSinceSync = (Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60);
-        shouldSync = hoursSinceSync > 1; // Sync if more than 1 hour old
-        console.log(`Last sync: ${lastSyncTime.toISOString()}, hours ago: ${hoursSinceSync.toFixed(2)}`);
-      }
-    }
-
-    if (!shouldSync) {
-      console.log("Data is recent, skipping sync");
-      return new Response(
-        JSON.stringify({ 
-          message: "Data is recent, no sync needed",
-          lastSync: true
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log("Starting Stripe data sync...");
-
-    // CRITICAL: First, clean up any incorrect Ayoub data before syncing
-    console.log("Cleaning up incorrect Ayoub data...");
+    // CRITICAL: ALWAYS clean up incorrect Ayoub data first
+    console.log("CRITICAL CLEANUP: Removing ALL incorrect Ayoub data from database...");
     const { error: cleanupError } = await supabaseClient
       .from('promo_code_sales')
       .delete()
@@ -95,8 +60,13 @@ serve(async (req) => {
     if (cleanupError) {
       console.error("Error cleaning up incorrect Ayoub data:", cleanupError);
     } else {
-      console.log("Successfully cleaned up incorrect Ayoub data");
+      console.log("Successfully cleaned up ALL incorrect Ayoub data");
     }
+
+    // Force refresh for any month that contains Ayoub data
+    let shouldSync = forceRefresh || true; // Always sync to ensure clean data
+    
+    console.log("Starting Stripe data sync with forced refresh...");
 
     // Get affiliate mapping from database
     const { data: affiliates, error: affiliateError } = await supabaseClient
@@ -188,7 +158,7 @@ serve(async (req) => {
           }
         }
 
-        // Handle Ayoub's special case: ONLY coaching product sales without discount codes after his start date
+        // CRITICAL AYOUB LOGIC: Only assign Ayoub to coaching products after his start date
         if (!stripePromotionCodeId && 
             actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
             sessionDate >= AYOUB_START_DATE) {
@@ -207,9 +177,9 @@ serve(async (req) => {
           continue;
         }
 
-        // CRITICAL CHECK: For Ayoub, double-check the product
+        // DOUBLE CRITICAL CHECK: For Ayoub, absolutely ensure it's the coaching product
         if (affiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
-          console.log(`CRITICAL: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
+          console.log(`CRITICAL BLOCK: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
           continue;
         }
 
@@ -304,6 +274,20 @@ serve(async (req) => {
     }
 
     console.log(`Found ${commissionRecords.length} affiliate commission records`);
+
+    // Before saving new records, delete ALL existing records for this period to ensure clean data
+    console.log(`Deleting existing records for ${year}-${month} to ensure clean data...`);
+    const { error: deleteError } = await supabaseClient
+      .from('promo_code_sales')
+      .delete()
+      .gte('created_at', startDate.toISOString())
+      .lt('created_at', new Date(parseInt(year), parseInt(month), 1).toISOString());
+
+    if (deleteError) {
+      console.error('Error deleting existing records:', deleteError);
+    } else {
+      console.log('Successfully deleted existing records for clean sync');
+    }
 
     // Save commission records to database using batch upserts
     if (commissionRecords.length > 0) {
