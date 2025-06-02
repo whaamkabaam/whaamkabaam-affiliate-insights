@@ -316,10 +316,10 @@ export default function Analytics() {
                                 <Cell 
                                   key={`cell-${index}`} 
                                   fill={COLORS[index % COLORS.length]}
-                                  stroke={hoveredProduct === entry.name ? '#ffffff' : 'none'}
-                                  strokeWidth={hoveredProduct === entry.name ? 2 : 0}
+                                  stroke={hoveredProduct !== entry.name ? '#ffffff' : 'none'}
+                                  strokeWidth={hoveredProduct !== entry.name ? 2 : 0}
                                   style={{
-                                    filter: hoveredProduct === entry.name ? 'brightness(1.1)' : 'none',
+                                    filter: hoveredProduct !== entry.name ? 'brightness(1.1)' : 'none',
                                     transition: 'all 0.3s ease'
                                   }}
                                 />
