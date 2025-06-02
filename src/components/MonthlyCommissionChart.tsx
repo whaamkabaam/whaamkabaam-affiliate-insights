@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
@@ -29,16 +30,13 @@ export function MonthlyCommissionChart() {
       setError(null);
       
       const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1; // 1-based month
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       
       try {
         const data = [];
-        for (let month = 1; month <= 12; month++) {
-          // Only include months up to current month
-          if (month > new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
-            break;
-          }
-          
+        // FIXED: Include all months up to current month (including June for 2025)
+        for (let month = 1; month <= Math.min(12, currentMonth); month++) {
           // Calculate date range for this month
           const startDate = new Date(currentYear, month - 1, 1).toISOString();
           const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();

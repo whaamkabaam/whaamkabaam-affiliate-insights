@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -112,7 +113,9 @@ export const useAffiliateData = (
     const shouldForceFetch = forceRefresh || isMonthYearChange;
     
     // FIXED: Only sync for current month or when explicitly forced, not for every month change
-    const shouldSync = forceRefresh || (isMonthYearChange && (year === 0 || month === 0 || month === new Date().getMonth() + 1));
+    const currentDate = new Date();
+    const shouldSync = forceRefresh || (isMonthYearChange && (year === 0 || month === 0 || 
+      (year === currentDate.getFullYear() && month === currentDate.getMonth() + 1)));
     
     setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);

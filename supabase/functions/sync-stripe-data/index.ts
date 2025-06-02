@@ -255,8 +255,9 @@ serve(async (req) => {
 
         console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
-        // Commission calculation logic
+        // CRITICAL FIX: Commission calculation logic - use original price for 10% affiliates
         const amountPaid = (session.amount_total || 0) / 100;
+        const originalAmount = (session.amount_subtotal || session.amount_total || 0) / 100; // Use subtotal (pre-discount) for commission calculation
         let affiliateCommission = 0;
 
         if (affiliateCode === AYOUB_AFFILIATE_CODE) {
@@ -294,7 +295,7 @@ serve(async (req) => {
             }
           }
         } else if (affiliateCode) {
-          // For other affiliates (Nic, Maru, etc.)
+          // CRITICAL FIX: For other affiliates (Nic, Maru, etc.) - calculate commission on ORIGINAL price (pre-discount)
           console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
           const { data: affiliateDetails, error: fetchRateError } = await supabaseClient
             .from('affiliates')
@@ -308,12 +309,13 @@ serve(async (req) => {
             console.warn(`SyncStripe: Assigning $0 commission for session ${session.id} due to missing rate for ${affiliateCode}.`);
           } else {
             const commissionRate = affiliateDetails.commission_rate;
-            affiliateCommission = amountPaid * commissionRate;
-            console.log(`SyncStripe: Calculated commission for ${affiliateCode} (Session: ${session.id}): AmountPaid $${amountPaid} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)}`);
+            // CRITICAL FIX: Use originalAmount (pre-discount) instead of amountPaid (post-discount)
+            affiliateCommission = originalAmount * commissionRate;
+            console.log(`SyncStripe: FIXED COMMISSION CALCULATION for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)} (was incorrectly using paid amount $${amountPaid})`);
             
             // SPECIAL LOGGING FOR NIC
             if (affiliateCode === 'nic') {
-              console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
+              console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Original Amount: $${originalAmount}, Paid Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
             }
           }
         }
