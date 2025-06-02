@@ -49,51 +49,69 @@ export default function Analytics() {
     }
   }, [user?.affiliateCode, selectedYear, selectedMonth, hasFetched, handleMonthChange]);
 
-  // Filter commissions to remove example data
+  // Filter commissions to remove example data and validate real data
   const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
 
+  // Strict validation for real data - check for actual commission amounts > 0
+  const realCommissions = filteredCommissions.filter(commission => {
+    const hasRealEmail = commission.customerEmail && 
+                        !commission.customerEmail.includes('example.com') && 
+                        !commission.customerEmail.includes('unknown@') &&
+                        commission.customerEmail !== 'unknown@example.com';
+    const hasRealCommission = commission.commission > 0;
+    const hasValidDate = commission.date && new Date(commission.date).getFullYear() >= 2020;
+    
+    return hasRealEmail && hasRealCommission && hasValidDate;
+  });
+
   // Check if we have any real data
-  const hasRealData = filteredCommissions.length > 0;
+  const hasRealData = realCommissions.length > 0;
 
-  // Calculate product distribution based on actual commission amounts (not sale amounts)
-  const productData = filteredCommissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
-    const productMap: Record<string, string> = {
-      "prod_RINKAvP3L2kZeV": "Basic",
-      "prod_RINJvQw1Qw1Qw1Q": "Premium", 
-      "prod_RINO6yE0y4O9gX": "Enterprise",
-    };
-    
-    const productName = productMap[commission.productId] || "Other";
-    
-    if (!acc[productName]) {
-      acc[productName] = { name: productName, value: 0 };
-    }
-    
-    // Use commission amount instead of sale amount for affiliate perspective
-    acc[productName].value += commission.commission;
-    return acc;
-  }, {});
+  // Only calculate charts and product data if we have real data
+  let productChartData: { name: string; value: number }[] = [];
+  let dailyChartData: { day: string; amount: number }[] = [];
 
-  const productChartData = Object.values(productData);
+  if (hasRealData) {
+    // Calculate product distribution based on actual commission amounts
+    const productData = realCommissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
+      const productMap: Record<string, string> = {
+        "prod_RINKAvP3L2kZeV": "Basic",
+        "prod_RINJvQw1Qw1Qw1Q": "Premium", 
+        "prod_RINO6yE0y4O9gX": "Enterprise",
+      };
+      
+      const productName = productMap[commission.productId] || "Other";
+      
+      if (!acc[productName]) {
+        acc[productName] = { name: productName, value: 0 };
+      }
+      
+      acc[productName].value += commission.commission;
+      return acc;
+    }, {});
+
+    productChartData = Object.values(productData);
+
+    // Calculate daily commission distribution
+    const dailyData = realCommissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
+      const date = new Date(commission.date);
+      const day = date.getDate().toString();
+      
+      if (!acc[day]) {
+        acc[day] = { day, amount: 0 };
+      }
+      
+      acc[day].amount += commission.commission;
+      return acc;
+    }, {});
+
+    // Sort by day number
+    dailyChartData = Object.values(dailyData).sort((a, b) => 
+      parseInt(a.day) - parseInt(b.day)
+    );
+  }
+
   const COLORS = ['#FF3F4E', '#FFCC00', '#0088FE', '#00C49F'];
-
-  // Calculate daily commission distribution
-  const dailyData = filteredCommissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
-    const date = new Date(commission.date);
-    const day = date.getDate().toString();
-    
-    if (!acc[day]) {
-      acc[day] = { day, amount: 0 };
-    }
-    
-    acc[day].amount += commission.commission;
-    return acc;
-  }, {});
-
-  // Sort by day number
-  const dailyChartData = Object.values(dailyData).sort((a, b) => 
-    parseInt(a.day) - parseInt(b.day)
-  );
 
   // No Data State Component
   const NoDataState = () => (
@@ -144,32 +162,38 @@ export default function Analytics() {
                       <CardTitle>Daily Commission</CardTitle>
                     </CardHeader>
                     <CardContent className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={dailyChartData}
-                          margin={{
-                            top: 5,
-                            right: 30,
-                            left: 20,
-                            bottom: 5,
-                          }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="day" />
-                          <YAxis />
-                          <Tooltip 
-                            formatter={(value) => {
-                              if (typeof value === 'number') {
-                                return `$${value.toFixed(2)}`;
-                              }
-                              return `$${value}`;
+                      {dailyChartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={dailyChartData}
+                            margin={{
+                              top: 5,
+                              right: 30,
+                              left: 20,
+                              bottom: 5,
                             }}
-                            labelFormatter={(label) => `Day ${label}`}
-                          />
-                          <Legend />
-                          <Bar dataKey="amount" fill="#FF3F4E" name="Commission ($)" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="day" />
+                            <YAxis />
+                            <Tooltip 
+                              formatter={(value) => {
+                                if (typeof value === 'number') {
+                                  return `$${value.toFixed(2)}`;
+                                }
+                                return `$${value}`;
+                              }}
+                              labelFormatter={(label) => `Day ${label}`}
+                            />
+                            <Legend />
+                            <Bar dataKey="amount" fill="#FF3F4E" name="Commission ($)" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                          No daily commission data available
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                   
@@ -178,33 +202,39 @@ export default function Analytics() {
                       <CardTitle>Commission by Product</CardTitle>
                     </CardHeader>
                     <CardContent className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={productChartData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {productChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value) => {
-                              if (typeof value === 'number') {
-                                return `$${value.toFixed(2)}`;
-                              }
-                              return `$${value}`;
-                            }}
-                          />
-                          <Legend />
-                        </PieChart>
-                      </ResponsiveContainer>
+                      {productChartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={productChartData}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {productChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(value) => {
+                                if (typeof value === 'number') {
+                                  return `$${value.toFixed(2)}`;
+                                }
+                                return `$${value}`;
+                              }}
+                            />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                          No product commission data available
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
