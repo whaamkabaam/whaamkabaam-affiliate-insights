@@ -47,7 +47,7 @@ export function MonthlyCommissionChart() {
           // For Ayoub, filter out commissions before May 20, 2025
           let dateFilter = `gte.${startDate}`;
           if (user.affiliateCode === 'ayoub') {
-            const ayoubStartDate = new Date(2025, 4, 20).toISOString(); // May 20, 2025
+            const ayoubStartDate = new Date(2025, 4, 20, 0, 0, 0, 0).toISOString(); // May 20, 2025
             // Use the later of the month start or Ayoub's start date
             const effectiveStartDate = startDate > ayoubStartDate ? startDate : ayoubStartDate;
             dateFilter = `gte.${effectiveStartDate}`;
