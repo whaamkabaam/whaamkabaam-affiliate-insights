@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock } from "lucide-react";
@@ -24,25 +24,19 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
     "July", "August", "September", "October", "November", "December"
   ];
 
-  // Only call onMonthChange when component mounts initially
   useEffect(() => {
     onMonthChange(selectedYear, selectedMonth);
-  }, []); // Empty dependency array - only run on mount
+  }, [selectedYear, selectedMonth, onMonthChange]);
 
-  // Separate effect for when values actually change
-  const handleSelectionChange = useCallback((year: number, month: number) => {
-    setSelectedYear(year);
-    setSelectedMonth(month);
-    onMonthChange(year, month);
-  }, [onMonthChange]);
+  const handleAllTimeClick = () => {
+    setSelectedYear(0);
+    setSelectedMonth(0);
+  };
 
-  const handleAllTimeClick = useCallback(() => {
-    handleSelectionChange(0, 0);
-  }, [handleSelectionChange]);
-
-  const handleCurrentMonthClick = useCallback(() => {
-    handleSelectionChange(currentDate.getFullYear(), currentDate.getMonth() + 1);
-  }, [handleSelectionChange, currentDate]);
+  const handleCurrentMonthClick = () => {
+    setSelectedMonth(currentDate.getMonth() + 1);
+    setSelectedYear(currentDate.getFullYear());
+  };
 
   const isAllTime = selectedYear === 0 && selectedMonth === 0;
   const isCurrentMonth = selectedYear === currentDate.getFullYear() && 
@@ -75,8 +69,10 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
           value={selectedMonth.toString()}
           onValueChange={(value) => {
             const month = parseInt(value);
-            const year = month > 0 && selectedYear === 0 ? currentDate.getFullYear() : selectedYear;
-            handleSelectionChange(year, month);
+            setSelectedMonth(month);
+            if (month > 0 && selectedYear === 0) {
+              setSelectedYear(currentDate.getFullYear());
+            }
           }}
         >
           <SelectTrigger className="w-[140px]">
@@ -95,8 +91,10 @@ export function MonthPicker({ onMonthChange }: MonthPickerProps) {
           value={selectedYear.toString()}
           onValueChange={(value) => {
             const year = parseInt(value);
-            const month = selectedMonth === 0 ? currentDate.getMonth() + 1 : selectedMonth;
-            handleSelectionChange(year, month);
+            setSelectedYear(year);
+            if (selectedMonth === 0) {
+              setSelectedMonth(currentDate.getMonth() + 1);
+            }
           }}
         >
           <SelectTrigger className="w-[100px]">

@@ -16,7 +16,8 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     summary,
     affiliateOverviews,
     fetchCommissionData,
-    fetchAffiliateOverviews
+    fetchAffiliateOverviews,
+    setLastFetchedMonthYear
   } = useAffiliateData(isAuthenticated, isAdmin, user);
 
   // Effect to fetch initial affiliate overview data for admin users with delayed initialization
@@ -40,6 +41,13 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
       isMounted = false;
     };
   }, [isAuthenticated, isAdmin, fetchAffiliateOverviews]);
+
+  // Reset tracking when the user changes
+  useEffect(() => {
+    if (user?.affiliateCode) {
+      setLastFetchedMonthYear(null);
+    }
+  }, [user?.affiliateCode, setLastFetchedMonthYear]);
 
   const value = {
     commissions,
