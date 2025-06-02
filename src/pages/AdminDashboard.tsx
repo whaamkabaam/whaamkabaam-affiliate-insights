@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
@@ -7,7 +6,6 @@ import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { InitializeUsers } from "@/components/InitializeUsers";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, DatabaseIcon } from "lucide-react";
 import {
@@ -205,7 +203,7 @@ export default function AdminDashboard() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <InitializeUsers />
+            
             
             <Card className="w-full">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -243,7 +241,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    No affiliates found. Use the Initialize Users function to create test affiliates.
+                    No affiliates found.
                   </div>
                 )}
               </CardContent>
