@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -57,12 +56,12 @@ serve(async (req) => {
       endTimestamp = Math.floor(endDate.getTime() / 1000);
       console.log(`Fetching Stripe sessions for "All Time" (last 5 years) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     } else {
-      // For specific month/year
-      startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+      // CRITICAL FIX: For specific month/year - ensure we capture the ENTIRE month including the last day
+      startDate = new Date(parseInt(year), parseInt(month) - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999); // Last day of month at 23:59:59
       startTimestamp = Math.floor(startDate.getTime() / 1000);
       endTimestamp = Math.floor(endDate.getTime() / 1000);
-      console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`FIXED DATE RANGE: Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     }
     
     console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
@@ -255,7 +254,7 @@ serve(async (req) => {
 
         console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
-        // CRITICAL FIX: Commission calculation logic - use original price for 10% affiliates
+        // CRITICAL FIX: Commission calculation logic - use original price for non-Ayoub affiliates
         const amountPaid = (session.amount_total || 0) / 100;
         const originalAmount = (session.amount_subtotal || session.amount_total || 0) / 100; // Use subtotal (pre-discount) for commission calculation
         let affiliateCommission = 0;
@@ -295,28 +294,17 @@ serve(async (req) => {
             }
           }
         } else if (affiliateCode) {
-          // CRITICAL FIX: For other affiliates (Nic, Maru, etc.) - calculate commission on ORIGINAL price (pre-discount)
+          // CRITICAL FIX: For other affiliates (Nic, Maru, etc.) - calculate commission on ORIGINAL price (pre-discount) at 20%
           console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
-          const { data: affiliateDetails, error: fetchRateError } = await supabaseClient
-            .from('affiliates')
-            .select('commission_rate')
-            .eq('affiliate_code', affiliateCode)
-            .single();
-
-          if (fetchRateError || !affiliateDetails) {
-            console.error(`SyncStripe: Could not fetch commission rate for affiliate ${affiliateCode} (Session: ${session.id}):`, fetchRateError?.message);
-            affiliateCommission = 0; 
-            console.warn(`SyncStripe: Assigning $0 commission for session ${session.id} due to missing rate for ${affiliateCode}.`);
-          } else {
-            const commissionRate = affiliateDetails.commission_rate;
-            // CRITICAL FIX: Use originalAmount (pre-discount) instead of amountPaid (post-discount)
-            affiliateCommission = originalAmount * commissionRate;
-            console.log(`SyncStripe: FIXED COMMISSION CALCULATION for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)} (was incorrectly using paid amount $${amountPaid})`);
-            
-            // SPECIAL LOGGING FOR NIC
-            if (affiliateCode === 'nic') {
-              console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Original Amount: $${originalAmount}, Paid Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
-            }
+          
+          // FIXED: Use 20% (0.2) commission rate for all non-Ayoub affiliates
+          const commissionRate = 0.2; // 20% commission rate
+          affiliateCommission = originalAmount * commissionRate;
+          console.log(`SyncStripe: FIXED COMMISSION CALCULATION for ${affiliateCode} (Session: ${session.id}): OriginalAmount $${originalAmount} * Rate ${commissionRate} (20%) = $${affiliateCommission.toFixed(2)} (was incorrectly using paid amount $${amountPaid})`);
+          
+          // SPECIAL LOGGING FOR NIC
+          if (affiliateCode === 'nic') {
+            console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Original Amount: $${originalAmount}, Paid Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
           }
         }
 

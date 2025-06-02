@@ -112,10 +112,9 @@ export const useAffiliateData = (
     const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
     const shouldForceFetch = forceRefresh || isMonthYearChange;
     
-    // FIXED: Only sync for current month or when explicitly forced, not for every month change
+    // OPTIMIZED: Only sync when absolutely necessary
     const currentDate = new Date();
-    const shouldSync = forceRefresh || (isMonthYearChange && (year === 0 || month === 0 || 
-      (year === currentDate.getFullYear() && month === currentDate.getMonth() + 1)));
+    const shouldSync = forceRefresh; // Only sync when explicitly requested
     
     setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);

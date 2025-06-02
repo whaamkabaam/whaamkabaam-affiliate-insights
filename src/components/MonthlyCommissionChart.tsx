@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
@@ -35,11 +34,11 @@ export function MonthlyCommissionChart() {
       
       try {
         const data = [];
-        // FIXED: Include all months up to current month (including June for 2025)
-        for (let month = 1; month <= Math.min(12, currentMonth); month++) {
-          // Calculate date range for this month
-          const startDate = new Date(currentYear, month - 1, 1).toISOString();
-          const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();
+        // CRITICAL FIX: Include ALL months from January up to current month (including June for 2025)
+        for (let month = 1; month <= currentMonth; month++) {
+          // FIXED: Calculate proper date range for the ENTIRE month including last day
+          const startDate = new Date(currentYear, month - 1, 1, 0, 0, 0, 0).toISOString();
+          const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString(); // Last day of month
           
           // Determine the effective start date for filtering commissions
           let effectiveFilterStartDate = startDate;
