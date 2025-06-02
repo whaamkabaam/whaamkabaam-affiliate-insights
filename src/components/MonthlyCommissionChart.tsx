@@ -43,13 +43,14 @@ export function MonthlyCommissionChart() {
           const startDate = new Date(currentYear, month - 1, 1).toISOString();
           const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();
           
-          // For Ayoub, filter out commissions before May 20, 2025
-          let dateFilter = `gte.${startDate}`;
+          // Determine the effective start date for filtering commissions
+          let effectiveFilterStartDate = startDate;
+          
+          // For Ayoub, ensure commissions are not counted before May 20, 2025
           if (user.affiliateCode === 'ayoub') {
-            const ayoubStartDate = new Date(2025, 4, 20, 0, 0, 0, 0).toISOString(); // May 20, 2025
-            // Use the later of the month start or Ayoub's start date
-            const effectiveStartDate = startDate > ayoubStartDate ? startDate : ayoubStartDate;
-            dateFilter = `gte.${effectiveStartDate}`;
+            const ayoubSpecificMinStartDate = new Date(2025, 4, 20, 0, 0, 0, 0).toISOString(); // May 20, 2025
+            // Use the later of the two dates: the start of the month we are processing, or Ayoub's specific minimum start date
+            effectiveFilterStartDate = (new Date(startDate) > new Date(ayoubSpecificMinStartDate)) ? startDate : ayoubSpecificMinStartDate;
           }
           
           // Query database directly for this affiliate's commission total for this month
@@ -58,7 +59,7 @@ export function MonthlyCommissionChart() {
             .from('promo_code_sales')
             .select('affiliate_commission, customer_email')
             .eq('promo_code_name', user.affiliateCode)
-            .filter('created_at', dateFilter)
+            .gte('created_at', effectiveFilterStartDate)
             .lte('created_at', endDate)
             .not('customer_email', 'like', '%unknown@example.com%')
             .not('customer_email', 'like', '%example.com%')
