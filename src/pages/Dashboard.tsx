@@ -149,16 +149,21 @@ export default function Dashboard() {
     console.log("- user.affiliateCode:", user?.affiliateCode);
     console.log("- isAdmin:", isAdmin);
     console.log("- affiliateIsLoading:", affiliateIsLoading);
+
     if (authIsLoading) {
       console.log("Showing auth loading screen");
-      return <div className="flex items-center justify-center p-8">
+      return (
+        <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading user data...</span>
-        </div>;
+        </div>
+      );
     }
+
     if (user && !user.affiliateCode && !isAdmin) {
       console.log("Showing no affiliate code warning");
-      return <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+      return (
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <AlertCircle className="h-5 w-5 text-orange-500" />
@@ -167,25 +172,51 @@ export default function Dashboard() {
               </p>
             </div>
           </CardContent>
-        </Card>;
+        </Card>
+      );
     }
+
     if (affiliateIsLoading && !summary && !initialDataFetched) {
       console.log("Showing affiliate data loading screen");
-      return <div className="flex items-center justify-center p-8">
+      return (
+        <div className="flex items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading your commission data...</span>
-        </div>;
+        </div>
+      );
     }
+
     if (!user?.affiliateCode && !isAdmin) {
       console.log("No user or affiliate code, returning null");
       return null;
     }
+
     console.log("Rendering full dashboard content");
-    return <>
+    return (
+      <>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <StatsCard title="Total Commission" value={isDataLoading ? "Loading..." : `$${summary.totalCommission.toFixed(2)}`} description={getDateRangeDescription()} icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />} className="bg-primary/5" isLoading={isDataLoading} />
-          <StatsCard title="New Customers" value={isDataLoading ? "Loading..." : summary.customerCount} description="People who used your affiliate code" icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />} isLoading={isDataLoading} />
-          <StatsCard title="Your Code" value={user?.affiliateCode || "N/A"} description="Share this code with your audience" icon={<Calendar className="w-4 h-4" />} className="bg-secondary/10" showCopyButton={true} />
+          <StatsCard
+            title="Total Commission"
+            value={isDataLoading ? "Loading..." : `$${summary.totalCommission.toFixed(2)}`}
+            description={getDateRangeDescription()}
+            icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+            className="bg-primary/5"
+            isLoading={isDataLoading}
+          />
+          <StatsCard
+            title="New Customers"
+            value={isDataLoading ? "Loading..." : summary.customerCount}
+            description="People who used your affiliate code"
+            icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+            isLoading={isDataLoading}
+          />
+          <StatsCard
+            title="Your Code"
+            value={user?.affiliateCode || "N/A"}
+            description="Share this code with your audience"
+            className="bg-secondary/10"
+            showCopyButton={true}
+          />
         </div>
 
         <div className="grid gap-4">
@@ -195,12 +226,19 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold tracking-tight">Recent Transactions</h2>
-            {(dataRefreshing || monthSwitching) && <div className="flex items-center text-sm text-muted-foreground">
+            {(dataRefreshing || monthSwitching) && (
+              <div className="flex items-center text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 {monthSwitching ? 'Loading period data...' : 'Refreshing data...'}
-              </div>}
+              </div>
+            )}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={dataRefreshing || monthSwitching || !user?.affiliateCode}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={dataRefreshing || monthSwitching || !user?.affiliateCode}
+              >
                 {dataRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Button variant="outline" size="sm" disabled={!user?.affiliateCode}>
@@ -211,15 +249,18 @@ export default function Dashboard() {
           <CommissionTable limit={5} />
         </div>
 
-        {error && <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
+        {error && (
+          <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
             <CardContent className="p-4">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="h-5 w-5 text-red-500" />
                 <p className="text-sm text-red-500">{error}</p>
               </div>
             </CardContent>
-          </Card>}
-      </>;
+          </Card>
+        )}
+      </>
+    );
   };
   console.log("About to render dashboard layout");
   return <div className="flex min-h-screen bg-background">
