@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,13 +21,13 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [dataRefreshing, setDataRefreshing] = useState(false);
-  const [initialDataFetched, setInitialDataFetched] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging to track loading states
   console.log("Dashboard render - Auth loading:", authIsLoading, "User:", user?.email, "Is admin:", isAdmin);
   console.log("Dashboard render - Affiliate loading:", affiliateIsLoading, "Has summary:", !!summary, "Error:", error);
   console.log("Dashboard render - User affiliate code:", user?.affiliateCode);
+  console.log("Dashboard render - Selected period:", selectedYear, selectedMonth);
 
   // Redirect admin users to admin dashboard
   useEffect(() => {
@@ -39,15 +40,18 @@ export default function Dashboard() {
   // Memoized month change handler to prevent unnecessary re-renders
   const handleMonthChange = useCallback((year: number, month: number) => {
     console.log("Month changed to:", year, month);
-    // Only update if actually different
-    if (year !== selectedYear || month !== selectedMonth) {
-      setSelectedYear(year);
-      setSelectedMonth(month);
-      setInitialDataFetched(false); // Reset to allow new fetch
+    // Always update and trigger fetch when month/year changes
+    setSelectedYear(year);
+    setSelectedMonth(month);
+    
+    // Immediately fetch data for the new period if user is authenticated
+    if (user?.affiliateCode && !isAdmin) {
+      console.log("Fetching data for new period:", year, month);
+      fetchCommissionData(year, month, true); // Force refresh for month changes
     }
-  }, [selectedYear, selectedMonth]);
+  }, [user?.affiliateCode, isAdmin, fetchCommissionData]);
 
-  // Single effect for data fetching with proper dependencies
+  // Initial data fetch effect
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
@@ -60,23 +64,21 @@ export default function Dashboard() {
       return;
     }
 
-    // Only proceed if we have a user with an affiliate code and haven't fetched initial data
-    if (user?.affiliateCode && !affiliateIsLoading && !initialDataFetched) {
-      console.log("Fetching commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
-      setInitialDataFetched(true);
+    // Only proceed if we have a user with an affiliate code
+    if (user?.affiliateCode && !affiliateIsLoading) {
+      console.log("Initial fetch for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
       
       fetchCommissionData(selectedYear, selectedMonth, false)
         .then(() => {
-          console.log("Commission data fetch completed successfully");
+          console.log("Initial commission data fetch completed successfully");
         })
         .catch((err) => {
-          console.error("Commission data fetch failed:", err);
-          setInitialDataFetched(false); // Allow retry on error
+          console.error("Initial commission data fetch failed:", err);
         });
     } else if (user && !user.affiliateCode) {
       console.log("User has no affiliate code:", user.email);
     }
-  }, [user?.affiliateCode, selectedYear, selectedMonth, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, initialDataFetched]);
+  }, [user?.affiliateCode, authIsLoading, isAdmin, affiliateIsLoading, fetchCommissionData, selectedYear, selectedMonth]);
 
   // Handle error display
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function Dashboard() {
   const handleRefresh = async () => {
     if (!dataRefreshing && user?.affiliateCode) {
       setDataRefreshing(true);
-      console.log("Force refreshing data from Stripe...");
+      console.log("Force refreshing data from Stripe for period:", selectedYear, selectedMonth);
       
       try {
         await fetchCommissionData(selectedYear, selectedMonth, true);

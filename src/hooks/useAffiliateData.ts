@@ -17,7 +17,6 @@ export const useAffiliateData = (
   const [affiliateOverviews, setAffiliateOverviews] = useState<AffiliateOverview[]>([]);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
   const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
-  const [lastFetchedMonthYear, setLastFetchedMonthYear] = useState<string | null>(null);
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
   const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
@@ -98,26 +97,21 @@ export const useAffiliateData = (
     }
 
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
-    const monthYearKey = `${year}-${month}`;
     
-    const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
-    const shouldForceFetch = forceRefresh || isMonthYearChange;
-    
-    if (currentFetchKey === fetchKey && isLoading && !shouldForceFetch) {
+    if (currentFetchKey === fetchKey && isLoading && !forceRefresh) {
       console.log(`Already fetching data for ${fetchKey}, skipping duplicate request`);
       return;
     }
     
-    setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${shouldForceFetch}, isMonthYearChange: ${isMonthYearChange}`);
+      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${forceRefresh}`);
       
-      if (shouldForceFetch) {
-        console.log("Force refresh or month change detected, syncing from Stripe...");
+      if (forceRefresh) {
+        console.log("Force refresh requested, syncing from Stripe...");
         
         const { error: syncError } = await supabase.functions.invoke("sync-stripe-data", {
           body: {
@@ -156,7 +150,7 @@ export const useAffiliateData = (
         return;
       }
 
-      console.log(`Received ${data.commissions?.length || 0} commissions`);
+      console.log(`Received ${data.commissions?.length || 0} commissions for period ${year}-${month}`);
       
       const rawCommissions = data.commissions || [];
       setCommissions(rawCommissions);
@@ -171,7 +165,7 @@ export const useAffiliateData = (
       setIsLoading(false);
       setCurrentFetchKey(null);
     }
-  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, lastFetchedMonthYear]);
+  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey]);
 
   return {
     commissions,
@@ -180,7 +174,6 @@ export const useAffiliateData = (
     summary,
     affiliateOverviews,
     fetchCommissionData,
-    fetchAffiliateOverviews,
-    setLastFetchedMonthYear
+    fetchAffiliateOverviews
   };
 };
