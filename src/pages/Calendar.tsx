@@ -1,16 +1,17 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, TrendingUp, DollarSign, Star, Sparkles } from "lucide-react";
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns";
+import { TrendingUp } from "lucide-react";
+import { addMonths, subMonths, format } from "date-fns";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { censorEmail } from "@/utils/emailUtils";
 import { filterCommissions } from "@/utils/affiliateUtils";
-import { cn } from "@/lib/utils";
+import { CalendarHeader } from "@/components/calendar/CalendarHeader";
+import { CalendarGrid } from "@/components/calendar/CalendarGrid";
+import { SelectedDatePanel } from "@/components/calendar/SelectedDatePanel";
+import { RecentEventsPanel } from "@/components/calendar/RecentEventsPanel";
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -38,9 +39,8 @@ export default function Calendar() {
   
   console.log(`Calendar: Total commissions: ${commissions.length}, Filtered: ${filteredCommissions.length}, User: ${user?.affiliateCode}`);
 
-  // Generate dates with events using filtered commissions - FIX: Use date directly without timezone conversion
+  // Generate dates with events using filtered commissions
   const datesWithEvents = filteredCommissions.reduce((acc: Record<string, { count: number; totalAmount: number; totalCommission: number }>, commission) => {
-    // FIX: Use the date string directly without creating a new Date object to avoid timezone issues
     const date = commission.date.split('T')[0];
     if (!acc[date]) {
       acc[date] = { count: 0, totalAmount: 0, totalCommission: 0 };
@@ -63,83 +63,11 @@ export default function Calendar() {
     setSelectedDate(null);
   }, []);
 
-  // Generate calendar days using date-fns for better date handling
-  const generateCalendarDays = () => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const calendarStart = new Date(monthStart);
-    calendarStart.setDate(calendarStart.getDate() - monthStart.getDay()); // Start from Sunday
-    
-    const calendarEnd = new Date(monthEnd);
-    calendarEnd.setDate(calendarEnd.getDate() + (6 - monthEnd.getDay())); // End on Saturday
-    
-    const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    
-    return calendarDays.map((day) => {
-      const dateString = format(day, 'yyyy-MM-dd');
-      const dayEvents = datesWithEvents[dateString];
-      const hasEvents = dayEvents && dayEvents.count > 0;
-      const isCurrentMonth = isSameMonth(day, currentMonth);
-      const isDayToday = isToday(day);
-      const isSelected = selectedDate && isSameDay(day, selectedDate);
-      const isHovered = hoveredDate && isSameDay(day, hoveredDate);
-      
-      return (
-        <div 
-          key={day.toISOString()}
-          className={cn(
-            "relative aspect-square border border-border/50 p-2 cursor-pointer transition-all duration-200 group flex flex-col",
-            "hover:border-primary/40 hover:bg-primary/5",
-            !isCurrentMonth && "text-muted-foreground/40",
-            isDayToday && "ring-2 ring-primary/50 bg-primary/5",
-            isSelected && "bg-primary/10 border-primary/60 ring-1 ring-primary/30",
-            isHovered && "bg-primary/5"
-          )}
-          onClick={() => setSelectedDate(day)}
-          onMouseEnter={() => setHoveredDate(day)}
-          onMouseLeave={() => setHoveredDate(null)}
-        >
-          {/* Date number and today indicator */}
-          <div className="flex items-center justify-between mb-1">
-            <div className={cn(
-              "font-medium text-sm leading-none",
-              !isCurrentMonth && "text-muted-foreground/50",
-              isDayToday && "text-primary font-bold",
-              isSelected && "text-primary font-semibold"
-            )}>
-              {format(day, 'd')}
-            </div>
-            {isDayToday && (
-              <Star className="w-3 h-3 text-amber-500 fill-amber-400 flex-shrink-0" />
-            )}
-          </div>
-          
-          {/* Events content - improved compact layout */}
-          {hasEvents && isCurrentMonth && (
-            <div className="flex-1 flex flex-col justify-center items-center space-y-1.5">
-              <Badge 
-                variant="secondary" 
-                className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700 group-hover:scale-105 transition-transform duration-200 font-medium"
-              >
-                <Sparkles className="w-2.5 h-2.5 mr-1" />
-                {dayEvents.count} sale{dayEvents.count > 1 ? 's' : ''}
-              </Badge>
-              
-              <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 leading-none">
-                +${dayEvents.totalCommission.toFixed(2)}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    });
-  };
-
-  // Get events for selected date
+  // Get events for selected date - FIX: Use proper date comparison
   const getSelectedDateEvents = () => {
     if (!selectedDate) return [];
     
-    const dateString = selectedDate.toISOString().split('T')[0];
+    const dateString = format(selectedDate, 'yyyy-MM-dd');
     return filteredCommissions.filter(commission => 
       commission.date.startsWith(dateString)
     ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -153,40 +81,12 @@ export default function Calendar() {
       <div className="flex-1">
         <DashboardHeader />
         <main className="flex-1 p-4 md:p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Commission Calendar
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Track your sales and commissions over time
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={prevMonth} 
-                disabled={isLoading}
-                className="hover:bg-primary/10 hover:border-primary/30 transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center bg-gradient-to-r from-primary/5 to-secondary/5 px-4 py-2 rounded-lg border border-primary/20">
-                <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                <span className="font-medium">{format(currentMonth, "MMMM yyyy")}</span>
-              </div>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={nextMonth} 
-                disabled={isLoading}
-                className="hover:bg-primary/10 hover:border-primary/30 transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <CalendarHeader
+            currentMonth={currentMonth}
+            isLoading={isLoading}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
+          />
 
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
@@ -204,16 +104,14 @@ export default function Calendar() {
                       <p className="mt-2 text-sm text-muted-foreground">Loading calendar data...</p>
                     </div>
                   ) : (
-                    <div className="calendar-container">
-                      <div className="grid grid-cols-7 gap-0">
-                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                          <div key={day} className="h-12 flex items-center justify-center font-medium bg-muted/10 text-muted-foreground border-r border-b border-border/30 last:border-r-0">
-                            {day}
-                          </div>
-                        ))}
-                        {generateCalendarDays()}
-                      </div>
-                    </div>
+                    <CalendarGrid
+                      currentMonth={currentMonth}
+                      selectedDate={selectedDate}
+                      hoveredDate={hoveredDate}
+                      datesWithEvents={datesWithEvents}
+                      onDateSelect={setSelectedDate}
+                      onDateHover={setHoveredDate}
+                    />
                   )}
                 </CardContent>
               </Card>
@@ -221,81 +119,13 @@ export default function Calendar() {
 
             <div className="space-y-6">
               {selectedDate && (
-                <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
-                  <CardHeader>
-                    <CardTitle className="text-lg">
-                      {format(selectedDate, "MMMM d, yyyy")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedDateEvents.length > 0 ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className="border-primary/30">
-                            {selectedDateEvents.length} commission{selectedDateEvents.length > 1 ? 's' : ''}
-                          </Badge>
-                          <div className="text-sm font-medium text-primary">
-                            +${selectedDateEvents.reduce((sum, e) => sum + e.commission, 0).toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {selectedDateEvents.map((commission, index) => (
-                            <div key={index} className="p-3 bg-background/50 rounded-lg border border-primary/10">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-medium">+${commission.commission.toFixed(2)}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(new Date(commission.date), "HH:mm")}
-                                </span>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Commission
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {censorEmail(commission.customerEmail)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No commissions on this date</p>
-                    )}
-                  </CardContent>
-                </Card>
+                <SelectedDatePanel
+                  selectedDate={selectedDate}
+                  selectedDateEvents={selectedDateEvents}
+                />
               )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Events</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {filteredCommissions.length > 0 ? (
-                      filteredCommissions
-                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                        .slice(0, 5)
-                        .map((commission, index) => (
-                          <div key={index} className="flex items-center justify-between border-b pb-2 hover:bg-muted/20 -mx-2 px-2 py-2 rounded transition-colors">
-                            <div>
-                              <p className="font-medium">{format(new Date(commission.date), "MMM d")}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Commission
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                from {censorEmail(commission.customerEmail)}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium text-emerald-600">+${commission.commission.toFixed(2)}</p>
-                            </div>
-                          </div>
-                        ))
-                    ) : (
-                      <p className="text-muted-foreground">No commission events found</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <RecentEventsPanel commissions={filteredCommissions} />
             </div>
           </div>
         </main>
