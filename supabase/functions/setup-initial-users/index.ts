@@ -1,19 +1,16 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
-import { createClient as createAdminClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
-import { createClient as createAuthClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
 import { corsHeaders } from '../_shared/cors.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const supabaseAdmin = createAdminClient(supabaseUrl, supabaseServiceKey);
-const adminAuthClient = createAuthClient(supabaseUrl, supabaseServiceKey, {
-  global: {
-    headers: { 'Content-Type': 'application/json' },
-  },
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
 });
 
 // Generate a secure random password
@@ -60,10 +57,17 @@ serve(async (req) => {
       
       for (const userData of users) {
         try {
-          // Check if user already exists
-          const { data: existingUser } = await adminAuthClient.getUserByEmail(userData.email);
+          // Check if user already exists using admin API
+          const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
           
-          if (existingUser && existingUser.user) {
+          if (listError) {
+            console.error(`Error listing users: ${listError.message}`);
+            continue;
+          }
+          
+          const existingUser = existingUsers.users.find(u => u.email === userData.email);
+          
+          if (existingUser) {
             console.log(`User ${userData.email} already exists, skipping creation.`);
             continue;
           }
@@ -71,13 +75,14 @@ serve(async (req) => {
           // Generate secure password
           const securePassword = generateSecurePassword(20);
           
-          // Create user
-          const { data, error } = await adminAuthClient.createUser({
+          // Create user using admin API
+          const { data, error } = await supabaseAdmin.auth.admin.createUser({
             email: userData.email,
             password: securePassword,
             user_metadata: {
               name: userData.name
-            }
+            },
+            email_confirm: true
           });
           
           if (error) {
@@ -129,13 +134,15 @@ serve(async (req) => {
       
       for (const setup of affiliateSetups) {
         try {
-          // Get user ID
-          const { data: userData, error: userError } = await adminAuthClient.getUserByEmail(setup.email);
+          // Get user ID by listing users and finding by email
+          const { data: allUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
           
-          if (userError) {
-            console.error(`Error getting user ID for ${setup.email}: ${userError.message}`);
+          if (listError) {
+            console.error(`Error listing users: ${listError.message}`);
             continue;
           }
+          
+          const userData = allUsers.users.find(u => u.email === setup.email);
           
           if (!userData?.id) {
             console.error(`User ID not found for ${setup.email}`);
