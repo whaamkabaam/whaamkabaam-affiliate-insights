@@ -88,25 +88,24 @@ export default function Calendar() {
         <div 
           key={day.toISOString()}
           className={cn(
-            "relative min-h-[100px] border border-muted/30 p-3 cursor-pointer transition-all duration-200 group flex flex-col",
-            "hover:border-primary/40 hover:shadow-sm",
-            !isCurrentMonth && "bg-muted/10 opacity-60",
-            isDayToday && "ring-1 ring-primary/30 bg-primary/5",
-            isSelected && "bg-primary/10 border-primary/60 shadow-md",
-            isHovered && "bg-primary/5",
-            hasEvents && "bg-gradient-to-br from-emerald-50/50 to-green-50/50 dark:from-emerald-950/10 dark:to-green-950/10"
+            "relative aspect-square border border-border/50 p-2 cursor-pointer transition-all duration-200 group flex flex-col",
+            "hover:border-primary/40 hover:bg-primary/5",
+            !isCurrentMonth && "text-muted-foreground/40",
+            isDayToday && "ring-2 ring-primary/50 bg-primary/5",
+            isSelected && "bg-primary/10 border-primary/60 ring-1 ring-primary/30",
+            isHovered && "bg-primary/5"
           )}
           onClick={() => setSelectedDate(day)}
           onMouseEnter={() => setHoveredDate(day)}
           onMouseLeave={() => setHoveredDate(null)}
         >
           {/* Date number and today indicator */}
-          <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <div className={cn(
-              "font-medium text-sm",
-              !isCurrentMonth && "text-muted-foreground/60",
-              isDayToday && "text-primary font-semibold",
-              isSelected && "text-primary"
+              "font-medium text-sm leading-none",
+              !isCurrentMonth && "text-muted-foreground/50",
+              isDayToday && "text-primary font-bold",
+              isSelected && "text-primary font-semibold"
             )}>
               {format(day, 'd')}
             </div>
@@ -116,21 +115,17 @@ export default function Calendar() {
           </div>
           
           {/* Events content - improved compact layout */}
-          {hasEvents && (
-            <div className="flex-1 flex flex-col justify-center items-center space-y-2">
+          {hasEvents && isCurrentMonth && (
+            <div className="flex-1 flex flex-col justify-center items-center space-y-1.5">
               <Badge 
                 variant="secondary" 
-                className={cn(
-                  "text-xs px-2.5 py-1 bg-emerald-100/80 text-emerald-700 border-emerald-200/50 flex items-center gap-1.5",
-                  "dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800/30",
-                  "group-hover:scale-105 transition-transform duration-200 font-medium"
-                )}
+                className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700 group-hover:scale-105 transition-transform duration-200 font-medium"
               >
-                <Sparkles className="w-3 h-3 flex-shrink-0" />
-                <span className="whitespace-nowrap">{dayEvents.count} sale{dayEvents.count > 1 ? 's' : ''}</span>
+                <Sparkles className="w-2.5 h-2.5 mr-1" />
+                {dayEvents.count} sale{dayEvents.count > 1 ? 's' : ''}
               </Badge>
               
-              <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 leading-none">
+              <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 leading-none">
                 +${dayEvents.totalCommission.toFixed(2)}
               </div>
             </div>
@@ -210,9 +205,9 @@ export default function Calendar() {
                     </div>
                   ) : (
                     <div className="calendar-container">
-                      <div className="grid grid-cols-7 gap-0 bg-muted/20">
+                      <div className="grid grid-cols-7 gap-0">
                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                          <div key={day} className="h-12 flex items-center justify-center font-medium bg-gradient-to-r from-primary/10 to-secondary/10 text-primary border-r border-b border-muted/30 last:border-r-0">
+                          <div key={day} className="h-12 flex items-center justify-center font-medium bg-muted/10 text-muted-foreground border-r border-b border-border/30 last:border-r-0">
                             {day}
                           </div>
                         ))}
