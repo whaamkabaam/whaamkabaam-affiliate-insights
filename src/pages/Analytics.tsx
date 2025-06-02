@@ -10,6 +10,7 @@ import { CommissionTable } from "@/components/CommissionTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { censorEmail } from "@/utils/emailUtils";
+import { filterCommissions } from "@/utils/affiliateUtils";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -19,6 +20,11 @@ export default function Analytics() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleMonthChange = useCallback(async (year: number, month: number) => {
+    // Prevent unnecessary re-fetches by checking if values actually changed
+    if (year === selectedYear && month === selectedMonth) {
+      return;
+    }
+    
     setIsLoading(true);
     setSelectedYear(year);
     setSelectedMonth(month);
@@ -34,16 +40,19 @@ export default function Analytics() {
     } else {
       setIsLoading(false);
     }
-  }, [user?.affiliateCode, fetchCommissionData]);
+  }, [user?.affiliateCode, fetchCommissionData, selectedYear, selectedMonth]);
 
   useEffect(() => {
-    if (user?.affiliateCode) {
-      handleMonthChange(selectedYear, selectedMonth);
+    if (user?.affiliateCode && selectedYear === 0 && selectedMonth === 0) {
+      handleMonthChange(0, 0);
     }
   }, [user?.affiliateCode, handleMonthChange, selectedYear, selectedMonth]);
 
+  // Filter commissions using the affiliate-specific filtering logic
+  const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
+
   // Calculate product distribution based on actual commission amounts (not sale amounts)
-  const productData = commissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
+  const productData = filteredCommissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
     const productMap: Record<string, string> = {
       "prod_RINKAvP3L2kZeV": "Basic",
       "prod_RINJvQw1Qw1Qw1Q": "Premium", 
@@ -65,7 +74,7 @@ export default function Analytics() {
   const COLORS = ['#FF3F4E', '#FFCC00', '#0088FE', '#00C49F'];
 
   // Calculate daily commission distribution
-  const dailyData = commissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
+  const dailyData = filteredCommissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
     const date = new Date(commission.date);
     const day = date.getDate().toString();
     

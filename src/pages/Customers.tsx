@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -66,6 +67,11 @@ export default function Customers() {
   }, [commissions, user?.affiliateCode]);
 
   const handleMonthChange = useCallback(async (year: number, month: number) => {
+    // Prevent unnecessary re-fetches by checking if values actually changed
+    if (year === selectedYear && month === selectedMonth) {
+      return;
+    }
+    
     setIsLoading(true);
     setSelectedYear(year);
     setSelectedMonth(month);
@@ -82,11 +88,11 @@ export default function Customers() {
     } else {
       setIsLoading(false);
     }
-  }, [user?.affiliateCode, fetchCommissionData]);
+  }, [user?.affiliateCode, fetchCommissionData, selectedYear, selectedMonth]);
 
   useEffect(() => {
-    if (user?.affiliateCode) {
-      handleMonthChange(selectedYear, selectedMonth);
+    if (user?.affiliateCode && selectedYear === 0 && selectedMonth === 0) {
+      handleMonthChange(0, 0);
     }
   }, [user?.affiliateCode, handleMonthChange, selectedYear, selectedMonth]);
 

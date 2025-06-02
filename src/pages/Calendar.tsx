@@ -9,25 +9,34 @@ import { format, addMonths, subMonths } from "date-fns";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { censorEmail } from "@/utils/emailUtils";
+import { filterCommissions } from "@/utils/affiliateUtils";
 
 export default function Calendar() {
   const { user } = useAuth();
   const { commissions, fetchCommissionData } = useAffiliate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
+  const [hasFetchedForMonth, setHasFetchedForMonth] = useState<string>("");
 
   // Fetch data for the current month when component mounts or month changes
   useEffect(() => {
-    if (user?.affiliateCode) {
+    const monthKey = `${currentMonth.getFullYear()}-${currentMonth.getMonth() + 1}`;
+    
+    if (user?.affiliateCode && monthKey !== hasFetchedForMonth) {
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
       setIsLoading(true);
+      setHasFetchedForMonth(monthKey);
+      
       fetchCommissionData(year, month, false).finally(() => setIsLoading(false));
     }
-  }, [user?.affiliateCode, currentMonth]); // Removed fetchCommissionData from deps to prevent infinite loop
+  }, [user?.affiliateCode, currentMonth, fetchCommissionData, hasFetchedForMonth]);
+
+  // Filter commissions using the affiliate-specific filtering logic
+  const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
 
   // Generate dates with events
-  const datesWithEvents = commissions.reduce((acc: Record<string, number>, commission) => {
+  const datesWithEvents = filteredCommissions.reduce((acc: Record<string, number>, commission) => {
     const date = new Date(commission.date).toISOString().split('T')[0];
     acc[date] = (acc[date] || 0) + 1;
     return acc;
@@ -142,8 +151,8 @@ export default function Calendar() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {commissions.length > 0 ? (
-                  commissions
+                {filteredCommissions.length > 0 ? (
+                  filteredCommissions
                     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 5)
                     .map((commission, index) => (
