@@ -32,7 +32,6 @@ export const useAffiliateData = (
     // Add throttling to prevent too many fetches in quick succession
     const now = Date.now();
     if (!force && now - lastFetchTimestamp < 5000) {
-      console.log("Skipping affiliate fetch - too soon since last fetch");
       return;
     }
     
@@ -41,16 +40,12 @@ export const useAffiliateData = (
     setLastFetchTimestamp(now);
 
     try {
-      console.log("Fetching affiliate overviews...");
-      
       const { data, error } = await supabase.rpc('admin_get_affiliates');
       
       if (error) {
-        console.error('RPC error:', error);
         toast.error('Failed to load affiliate data');
         
         if (retryCount < 2) {
-          console.log(`Retrying... (${retryCount + 1})`);
           setTimeout(() => fetchAffiliateOverviews(retryCount + 1, true), 1000 * (retryCount + 1));
           return;
         }
@@ -70,13 +65,10 @@ export const useAffiliateData = (
         }));
         
         setAffiliateOverviews(overviews);
-        console.log(`Received ${overviews.length} affiliate records`);
       } else {
-        console.error('Unexpected data format from RPC:', data);
         setAffiliateOverviews([]);
       }
     } catch (err) {
-      console.error("Error fetching affiliate overviews:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch affiliate data");
       setAffiliateOverviews([]);
     } finally {
@@ -105,7 +97,6 @@ export const useAffiliateData = (
     
     // Prevent duplicate fetches for the same key
     if (ongoingFetches.current.has(fetchKey)) {
-      console.log(`Already fetching data for ${fetchKey}, skipping duplicate request`);
       return;
     }
 
@@ -125,11 +116,7 @@ export const useAffiliateData = (
     ongoingFetches.current.add(fetchKey);
 
     try {
-      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, shouldSync: ${shouldSync}`);
-      
       if (shouldSync) {
-        console.log("Syncing from Stripe...");
-        
         const { error: syncError } = await supabase.functions.invoke("sync-stripe-data", {
           body: {
             year,
@@ -140,9 +127,7 @@ export const useAffiliateData = (
         });
 
         if (syncError) {
-          console.error("Error syncing Stripe data:", syncError);
-        } else {
-          console.log("Stripe data sync completed");
+          // Silent error for production - sync failures shouldn't break the UI
         }
       }
       
@@ -158,7 +143,6 @@ export const useAffiliateData = (
       });
 
       if (error) {
-        console.error("Error fetching commission data:", error);
         setError(`Failed to fetch commission data: ${error.message}`);
         return;
       }
@@ -168,8 +152,6 @@ export const useAffiliateData = (
         return;
       }
 
-      console.log(`Received ${data.commissions?.length || 0} commissions for ${user.affiliateCode}`);
-      
       const rawCommissions = data.commissions || [];
       setCommissions(rawCommissions);
       
@@ -178,7 +160,6 @@ export const useAffiliateData = (
       setSummary(calculatedSummary);
 
     } catch (err) {
-      console.error("Exception during commission fetch:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch commission data");
     } finally {
       setIsLoading(false);

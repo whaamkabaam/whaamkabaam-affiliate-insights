@@ -49,26 +49,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Simplified and faster user data fetching
   const fetchUserData = async (userId: string, currentUser: User): Promise<UserWithRole> => {
     try {
-      console.log("AuthContext: Starting fetchUserData for userId:", userId);
-      
       // Check if this is a known user first
       const knownUserData = currentUser.email ? getKnownUserData(currentUser.email) : null;
       
       if (knownUserData) {
-        console.log("AuthContext: Using known user data for:", currentUser.email);
         const finalUser: UserWithRole = {
           ...currentUser,
           role: knownUserData.role,
           affiliateCode: knownUserData.affiliateCode,
           name: knownUserData.name
         };
-        console.log("AuthContext: Final user object prepared (known user):", finalUser);
         return finalUser;
       }
 
       // For unknown users, try a simplified direct query approach with very short timeout
-      console.log("AuthContext: Unknown user, attempting simplified queries...");
-      
       try {
         // Try a simple direct query to affiliates table with 1 second timeout
         const affiliateQuery = supabase
@@ -84,7 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const { data: affiliateData } = await Promise.race([affiliateQuery, timeoutPromise]) as any;
         
         if (affiliateData) {
-          console.log("AuthContext: Found affiliate data via direct query:", affiliateData);
           // Only admin@whaamkabaam.com should be admin
           const isUserAdmin = currentUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
           const finalUser: UserWithRole = {
@@ -96,11 +89,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return finalUser;
         }
       } catch (queryError) {
-        console.warn("AuthContext: Direct query failed:", queryError);
+        // Silent fallback for production
       }
 
       // Final fallback for unknown users
-      console.log("AuthContext: Using complete fallback for unknown user");
       const fallbackUser: UserWithRole = {
         ...currentUser,
         role: 'affiliate',
@@ -111,8 +103,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return fallbackUser;
 
     } catch (err: any) {
-      console.error("AuthContext: Critical error in fetchUserData:", err);
-      
       // Emergency fallback
       const emergencyUser: UserWithRole = {
         ...currentUser,
@@ -127,26 +117,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Simplified auth state management
   useEffect(() => {
-    console.log("AuthContext: Initializing auth state listener and session check.");
-    
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log("AuthContext: Auth state changed. Event:", event, "Session exists:", !!newSession);
         setSession(newSession);
 
         if (newSession?.user) {
-          console.log("AuthContext: User found in session:", newSession.user.email);
           setIsLoading(true);
           try {
             const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
-            console.log("AuthContext: fetchUserData completed successfully:", detailedUser);
             setUser(detailedUser);
             // Only set isAdmin true for admin@whaamkabaam.com
             const adminStatus = detailedUser.role === 'admin' && detailedUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
             setIsAdmin(adminStatus);
-            console.log("AuthContext: Setting isAdmin to:", adminStatus, "for user:", detailedUser.email);
           } catch (error) {
-            console.error("AuthContext: Error in fetchUserData:", error);
             // Set a robust minimal user
             const knownUserData = newSession.user.email ? getKnownUserData(newSession.user.email) : null;
             
@@ -161,10 +144,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Only admin@whaamkabaam.com is admin
             const adminStatus = knownUserData?.role === 'admin' && newSession.user.email?.toLowerCase() === 'admin@whaamkabaam.com';
             setIsAdmin(adminStatus);
-            console.log("AuthContext: Fallback setting isAdmin to:", adminStatus, "for user:", newSession.user.email);
           }
         } else {
-          console.log("AuthContext: No user in session. Clearing user state.");
           setUser(null);
           setIsAdmin(false);
         }
@@ -174,20 +155,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Initial session check
     supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
-      console.log("AuthContext: Initial getSession complete. Session exists:", !!existingSession);
       if (!existingSession) {
         setIsLoading(false);
       }
       // onAuthStateChange will handle the session if it exists
     }).catch((err) => {
-        console.error("AuthContext: Error during initial getSession:", err);
         setIsLoading(false);
     });
 
     return () => {
       if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
-        console.log("AuthContext: Unsubscribed from auth state changes.");
       }
     };
   }, []);
@@ -197,23 +175,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      console.log(`Attempting to sign in with email: ${email}`);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
       if (error) {
-        console.error("Login error:", error);
         setError(error.message || "Login failed");
         throw error;
       }
       
-      console.log("Login successful:", data);
       return data;
     } catch (err: any) {
-      console.error("Login exception:", err);
       setError(err.message || "Login failed");
       throw err;
     } finally {
@@ -229,7 +202,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAdmin(false);
       toast.success("Successfully logged out");
     } catch (err: any) {
-      console.error("Logout error:", err.message);
       toast.error("Failed to log out");
     }
   };
