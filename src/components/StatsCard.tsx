@@ -39,12 +39,12 @@ export function StatsCard({
 
   return (
     <Card className={cn("overflow-hidden", className)}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 min-h-[60px]">
         <div className="flex items-center gap-2">
           <CardTitle className="text-sm font-medium">{title}</CardTitle>
           {icon && <div className="w-4 h-4 text-muted-foreground">{icon}</div>}
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center h-8">
           {showCopyButton && !isLoading && (
             <Button
               variant="ghost"
@@ -57,7 +57,7 @@ export function StatsCard({
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-8 w-20" />
@@ -65,9 +65,9 @@ export function StatsCard({
           </div>
         ) : (
           <>
-            <div className="text-2xl font-bold">{value}</div>
+            <div className="text-2xl font-bold leading-none mb-1">{value}</div>
             {description && (
-              <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
             )}
             {trend && (
               <div
