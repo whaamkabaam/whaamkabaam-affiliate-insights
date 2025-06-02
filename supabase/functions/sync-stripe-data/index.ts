@@ -138,8 +138,26 @@ serve(async (req) => {
       try {
         const sessionDate = new Date(session.created * 1000);
         const actualProductIdInSession = session.line_items?.data?.[0]?.price?.product || null;
+        const customerEmail = session.customer_details?.email || 'unknown';
         
-        console.log(`Processing session ${session.id}: Product ${actualProductIdInSession}, Date: ${sessionDate.toISOString()}, Customer: ${session.customer_details?.email || 'unknown'}`);
+        console.log(`Processing session ${session.id}: Product ${actualProductIdInSession}, Date: ${sessionDate.toISOString()}, Customer: ${customerEmail}`);
+        
+        // DETAILED LOGGING FOR PROBLEMATIC SESSIONS
+        const isProblematicSession = customerEmail.includes('ni') || customerEmail.includes('no') || 
+                                   (sessionDate >= new Date('2025-05-29') && sessionDate <= new Date('2025-06-01'));
+        
+        if (isProblematicSession) {
+          console.log(`DETAILED DEBUG for session ${session.id}:`);
+          console.log(`- Full session object keys: ${Object.keys(session)}`);
+          console.log(`- Product ID: ${actualProductIdInSession}`);
+          console.log(`- Expected coaching product: ${AYOUB_COACHING_PRODUCT_ID}`);
+          console.log(`- Product match: ${actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID}`);
+          console.log(`- Session date: ${sessionDate.toISOString()}`);
+          console.log(`- Ayoub start date: ${AYOUB_START_DATE.toISOString()}`);
+          console.log(`- Date check passed: ${sessionDate >= AYOUB_START_DATE}`);
+          console.log(`- Discounts array: ${JSON.stringify(session.discounts, null, 2)}`);
+          console.log(`- Customer email: ${customerEmail}`);
+        }
         
         // Check if session has affiliate discount
         let stripePromotionCodeId = null;
@@ -147,15 +165,29 @@ serve(async (req) => {
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
+            if (isProblematicSession) {
+              console.log(`DETAILED DEBUG - Discount object: ${JSON.stringify(discount, null, 2)}`);
+            }
+            
             // Try to get promotion code from different possible fields
             if (discount.promotion_code) {
               stripePromotionCodeId = discount.promotion_code;
+              if (isProblematicSession) {
+                console.log(`DETAILED DEBUG - Found promotion_code: ${stripePromotionCodeId}`);
+              }
               break;
             } else if (discount.coupon && discount.coupon.id) {
               stripePromotionCodeId = discount.coupon.id;
+              if (isProblematicSession) {
+                console.log(`DETAILED DEBUG - Found coupon.id: ${stripePromotionCodeId}`);
+              }
               break;
             }
           }
+        }
+
+        if (isProblematicSession) {
+          console.log(`DETAILED DEBUG - Final stripePromotionCodeId: ${stripePromotionCodeId}`);
         }
 
         // CRITICAL AYOUB LOGIC: Only assign Ayoub to coaching products after his start date
@@ -163,12 +195,22 @@ serve(async (req) => {
             actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
             sessionDate >= AYOUB_START_DATE) {
           // This is a coaching product sale with no discount code after Ayoub's start date
+          if (isProblematicSession) {
+            console.log(`DETAILED DEBUG - AYOUB ASSIGNMENT: No discount code, coaching product, after start date`);
+          }
           console.log(`AYOUB SPECIAL CASE: Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
           affiliateCode = AYOUB_AFFILIATE_CODE;
           stripePromotionCodeId = "no_discount_ayoub_coaching"; // Special identifier for tracking
         } else if (stripePromotionCodeId) {
           // Map Stripe promotion code to internal affiliate code
           affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
+          if (isProblematicSession) {
+            console.log(`DETAILED DEBUG - Mapped stripePromotionCodeId ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
+          }
+        }
+
+        if (isProblematicSession) {
+          console.log(`DETAILED DEBUG - Final affiliateCode: ${affiliateCode}`);
         }
         
         // Skip sessions without affiliate assignment
@@ -180,6 +222,9 @@ serve(async (req) => {
         // DOUBLE CRITICAL CHECK: For Ayoub, absolutely ensure it's the coaching product
         if (affiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
           console.log(`CRITICAL BLOCK: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
+          if (isProblematicSession) {
+            console.log(`DETAILED DEBUG - BLOCKED: Ayoub assigned to wrong product`);
+          }
           continue;
         }
 
@@ -205,27 +250,45 @@ serve(async (req) => {
                 // Condition: No discount was used at all for the coaching product sale
                 ayoubQualifiesForFlatCommission = true;
                 console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) had NO discount. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
+                if (isProblematicSession) {
+                  console.log(`DETAILED DEBUG - AYOUB COMMISSION: No discount, qualifies for $${AYOUB_FLAT_COMMISSION}`);
+                }
               } else {
                 // A discount was used. Check if it's one of the specifically allowed ones for Ayoub's flat commission.
                 if (stripePromotionCodeId && AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION.includes(stripePromotionCodeId)) {
                   ayoubQualifiesForFlatCommission = true;
                   console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used an ALLOWED promo ID ${stripePromotionCodeId}. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
+                  if (isProblematicSession) {
+                    console.log(`DETAILED DEBUG - AYOUB COMMISSION: Allowed promo used, qualifies for $${AYOUB_FLAT_COMMISSION}`);
+                  }
                 } else {
                   // A discount was used, but it's not one of the special ones for Ayoub's flat rate.
                   console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used promo ID ${stripePromotionCodeId}, which is NOT in the allowed list for the flat $20 commission. Commission $0.`);
+                  if (isProblematicSession) {
+                    console.log(`DETAILED DEBUG - AYOUB COMMISSION: Non-allowed promo used, commission $0`);
+                  }
                 }
               }
 
               if (ayoubQualifiesForFlatCommission) {
                 affiliateCommission = AYOUB_FLAT_COMMISSION;
                 console.log(`SyncStripe: AYOUB - Final commission for session ${session.id}: $${AYOUB_FLAT_COMMISSION}`);
+                if (isProblematicSession) {
+                  console.log(`DETAILED DEBUG - AYOUB FINAL COMMISSION: $${AYOUB_FLAT_COMMISSION}`);
+                }
               } else {
                 affiliateCommission = 0; // Explicitly $0 if conditions not met for the coaching product
+                if (isProblematicSession) {
+                  console.log(`DETAILED DEBUG - AYOUB FINAL COMMISSION: $0 (conditions not met)`);
+                }
               }
             } else {
               // It's Ayoub, but NOT the coaching product. Ayoub only gets commission on the coaching product.
               affiliateCommission = 0;
               console.log(`SyncStripe: AYOUB - Session ${session.id} - Product ${actualProductIdInSession} is not the coaching product (${AYOUB_COACHING_PRODUCT_ID}). No commission for Ayoub.`);
+              if (isProblematicSession) {
+                console.log(`DETAILED DEBUG - AYOUB COMMISSION: Wrong product, commission $0`);
+              }
             }
           }
         } else if (affiliateCode) { // For other affiliates (Nic, Maru, etc.)
@@ -245,6 +308,14 @@ serve(async (req) => {
             affiliateCommission = amountPaid * commissionRate;
             console.log(`SyncStripe: Calculated commission for ${affiliateCode} (Session: ${session.id}): AmountPaid $${amountPaid} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)}`);
           }
+        }
+
+        if (isProblematicSession) {
+          console.log(`DETAILED DEBUG - FINAL RESULT for session ${session.id}:`);
+          console.log(`- Will be saved with affiliate: ${affiliateCode}`);
+          console.log(`- Commission: $${affiliateCommission}`);
+          console.log(`- Product: ${actualProductIdInSession}`);
+          console.log(`- Amount paid: $${amountPaid}`);
         }
 
         const record = {
