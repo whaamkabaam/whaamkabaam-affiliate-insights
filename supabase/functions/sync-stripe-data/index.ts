@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -14,15 +13,15 @@ serve(async (req) => {
 
   // Constants for Ayoub's commission logic
   const AYOUB_AFFILIATE_CODE = "ayoub";
-  const AYOUB_COACHING_PRODUCT_ID = "prod_RINO6yE0y4O9gX"; // Confirmed this is correct
-  const AYOUB_FLAT_COMMISSION = 20; // $20
-  const AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION = [ // Specific promo IDs for Ayoub's $20 flat rate
+  const AYOUB_COACHING_PRODUCT_ID = "prod_RINO6yE0y4O9gX";
+  const AYOUB_FLAT_COMMISSION = 20;
+  const AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION = [
     "promo_1QccV9CgyJ2z2jNZBnSTn73U",
     "promo_1QccV9CgyJ2z2jNZpn1g55Dm",
     "promo_1QccV9CgyJ2z2jNZ5NxQQDGO",
     "promo_1QccV9CgyJ2z2jNZMLVi7Lv7"
   ];
-  const AYOUB_START_DATE = new Date("2025-05-20T00:00:00Z"); // Ayoub's affiliate program start date
+  const AYOUB_START_DATE = new Date("2025-05-20T00:00:00Z");
 
   // List of problematic customer emails to track
   const PROBLEMATIC_EMAILS = ["nicholasm803@gmail.com", "novaapalz@gmail.com"];
@@ -66,10 +65,12 @@ serve(async (req) => {
       console.log("Successfully cleaned up ALL incorrect Ayoub data");
     }
 
-    // Force refresh for any month that contains Ayoub data
-    let shouldSync = forceRefresh || true; // Always sync to ensure clean data
+    // FIXED: Only sync when explicitly requested or for current month, not always
+    const currentDate = new Date();
+    const isCurrentMonth = year == currentDate.getFullYear() && month == (currentDate.getMonth() + 1);
+    const shouldSync = forceRefresh || isCurrentMonth;
     
-    console.log("Starting Stripe data sync with forced refresh...");
+    console.log(`Starting Stripe data sync. Force refresh: ${forceRefresh}, Current month: ${isCurrentMonth}, Will sync: ${shouldSync}`);
 
     // Get affiliate mapping from database
     const { data: affiliates, error: affiliateError } = await supabaseClient
@@ -171,67 +172,58 @@ serve(async (req) => {
           if (isProblematicSession) {
             console.log(`🔍 PROBLEMATIC - SKIPPED due to payment_status: ${session.payment_status}, session status: ${session.status}`);
           }
-          continue; // Skip to the next session if not paid
+          continue;
         }
         
-        // Check if session has affiliate discount
+        // ENHANCED DISCOUNT PROCESSING FOR NIC'S SESSIONS
         let stripePromotionCodeId = null;
         let affiliateCode = null;
         
         if (session.discounts && session.discounts.length > 0) {
           for (const discount of session.discounts) {
-            if (isProblematicSession) {
-              console.log(`🔍 PROBLEMATIC - Processing discount:`, JSON.stringify(discount, null, 2));
-            }
+            console.log(`🔍 NIC DEBUG - Processing discount for session ${session.id}:`, JSON.stringify(discount, null, 2));
             
-            // Try to get promotion code from different possible fields
+            // ENHANCED: Try multiple ways to extract promotion code
             if (discount.promotion_code) {
               stripePromotionCodeId = discount.promotion_code;
-              if (isProblematicSession) {
-                console.log(`🔍 PROBLEMATIC - Found promotion_code: ${stripePromotionCodeId}`);
-              }
+              console.log(`🔍 NIC DEBUG - Found promotion_code: ${stripePromotionCodeId}`);
               break;
             } else if (discount.coupon && discount.coupon.id) {
               stripePromotionCodeId = discount.coupon.id;
-              if (isProblematicSession) {
-                console.log(`🔍 PROBLEMATIC - Found coupon.id: ${stripePromotionCodeId}`);
-              }
+              console.log(`🔍 NIC DEBUG - Found coupon.id: ${stripePromotionCodeId}`);
+              break;
+            } else if (discount.id) {
+              // Sometimes the discount ID itself is the promotion code
+              stripePromotionCodeId = discount.id;
+              console.log(`🔍 NIC DEBUG - Using discount.id: ${stripePromotionCodeId}`);
               break;
             }
           }
         }
 
-        if (isProblematicSession) {
-          console.log(`🔍 PROBLEMATIC - Final stripePromotionCodeId: ${stripePromotionCodeId}`);
-          console.log(`🔍 PROBLEMATIC - No discount check result: ${!stripePromotionCodeId}`);
-        }
+        console.log(`🔍 NIC DEBUG - Final stripePromotionCodeId: ${stripePromotionCodeId}`);
+        console.log(`🔍 NIC DEBUG - Available affiliate mappings:`, Object.keys(stripeToAffiliateMap));
 
         // CRITICAL AYOUB LOGIC: Only assign Ayoub to coaching products after his start date
         if (!stripePromotionCodeId && 
             actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
             sessionDate >= AYOUB_START_DATE) {
-          // This is a coaching product sale with no discount code after Ayoub's start date
-          if (isProblematicSession) {
-            console.log(`🔍 PROBLEMATIC - AYOUB ASSIGNMENT: Conditions met for no-discount attribution`);
-            console.log(`🔍 PROBLEMATIC - - No promotion code: ${!stripePromotionCodeId}`);
-            console.log(`🔍 PROBLEMATIC - - Correct product: ${actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID}`);
-            console.log(`🔍 PROBLEMATIC - - After start date: ${sessionDate >= AYOUB_START_DATE}`);
-            console.log(`🔍 PROBLEMATIC - - Session is PAID: ${session.payment_status === "paid"}`);
-          }
           console.log(`AYOUB SPECIAL CASE: Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
           affiliateCode = AYOUB_AFFILIATE_CODE;
-          stripePromotionCodeId = "no_discount_ayoub_coaching"; // Special identifier for tracking
+          stripePromotionCodeId = "no_discount_ayoub_coaching";
         } else if (stripePromotionCodeId) {
           // Map Stripe promotion code to internal affiliate code
           affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
-          if (isProblematicSession) {
-            console.log(`🔍 PROBLEMATIC - Mapped stripePromotionCodeId ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
+          console.log(`🔍 NIC DEBUG - Mapped ${stripePromotionCodeId} to affiliateCode: ${affiliateCode}`);
+          
+          // ADDITIONAL DEBUGGING FOR NIC'S SPECIFIC PROMO CODE
+          if (stripePromotionCodeId === "promo_1QyefCCgyJ2z2jNZEZv16p7s") {
+            console.log(`🚨 NIC'S PROMO CODE DETECTED! Session: ${session.id}, Mapped to: ${affiliateCode}`);
+            console.log(`🚨 NIC MAPPING CHECK - Available mappings:`, stripeToAffiliateMap);
           }
         }
 
-        if (isProblematicSession) {
-          console.log(`🔍 PROBLEMATIC - Final affiliateCode assignment: ${affiliateCode}`);
-        }
+        console.log(`🔍 NIC DEBUG - Final affiliateCode assignment: ${affiliateCode}`);
         
         // Skip sessions without affiliate assignment
         if (!affiliateCode) {
@@ -242,77 +234,51 @@ serve(async (req) => {
         // DOUBLE CRITICAL CHECK: For Ayoub, absolutely ensure it's the coaching product
         if (affiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
           console.log(`CRITICAL BLOCK: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
-          if (isProblematicSession) {
-            console.log(`🔍 PROBLEMATIC - BLOCKED: Ayoub assigned to wrong product`);
-          }
           continue;
         }
 
         console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
-        // Commission calculation logic for Ayoub's date filter
+        // Commission calculation logic
         const amountPaid = (session.amount_total || 0) / 100;
         let affiliateCommission = 0;
 
         if (affiliateCode === AYOUB_AFFILIATE_CODE) {
-          // Check if session is after Ayoub's start date
+          // ... keep existing code (Ayoub commission calculation logic)
           if (sessionDate < AYOUB_START_DATE) {
             console.log(`SyncStripe: Ayoub session ${session.id} is before start date ${AYOUB_START_DATE.toISOString()}, skipping commission.`);
             affiliateCommission = 0;
           } else {
             console.log(`SyncStripe: Processing session ${session.id} for AYOUB. Product: ${actualProductIdInSession}. Promo code on session: ${stripePromotionCodeId || 'none'}. Date: ${sessionDate.toISOString()}`);
 
-            // CRITICAL FIX: Only process if it's actually the coaching product
             if (actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID) {
               let ayoubQualifiesForFlatCommission = false;
 
               if (!session.discounts || session.discounts.length === 0) {
-                // Condition: No discount was used at all for the coaching product sale
                 ayoubQualifiesForFlatCommission = true;
                 console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) had NO discount. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
-                if (isProblematicSession) {
-                  console.log(`🔍 PROBLEMATIC - AYOUB COMMISSION: No discount path taken, qualifies for $${AYOUB_FLAT_COMMISSION}`);
-                }
               } else {
-                // A discount was used. Check if it's one of the specifically allowed ones for Ayoub's flat commission.
                 if (stripePromotionCodeId && AYOUB_ALLOWED_PROMO_IDS_FOR_FLAT_COMMISSION.includes(stripePromotionCodeId)) {
                   ayoubQualifiesForFlatCommission = true;
                   console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used an ALLOWED promo ID ${stripePromotionCodeId}. Qualifies for $${AYOUB_FLAT_COMMISSION}.`);
-                  if (isProblematicSession) {
-                    console.log(`🔍 PROBLEMATIC - AYOUB COMMISSION: Allowed promo used, qualifies for $${AYOUB_FLAT_COMMISSION}`);
-                  }
                 } else {
-                  // A discount was used, but it's not one of the special ones for Ayoub's flat rate.
                   console.log(`SyncStripe: AYOUB - Session ${session.id} (Product: ${AYOUB_COACHING_PRODUCT_ID}) used promo ID ${stripePromotionCodeId}, which is NOT in the allowed list for the flat $20 commission. Commission $0.`);
-                  if (isProblematicSession) {
-                    console.log(`🔍 PROBLEMATIC - AYOUB COMMISSION: Non-allowed promo used, commission $0`);
-                  }
                 }
               }
 
               if (ayoubQualifiesForFlatCommission) {
                 affiliateCommission = AYOUB_FLAT_COMMISSION;
                 console.log(`SyncStripe: AYOUB - Final commission for session ${session.id}: $${AYOUB_FLAT_COMMISSION}`);
-                if (isProblematicSession) {
-                  console.log(`🔍 PROBLEMATIC - AYOUB FINAL COMMISSION: $${AYOUB_FLAT_COMMISSION}`);
-                }
               } else {
-                affiliateCommission = 0; // Explicitly $0 if conditions not met for the coaching product
-                if (isProblematicSession) {
-                  console.log(`🔍 PROBLEMATIC - AYOUB FINAL COMMISSION: $0 (conditions not met)`);
-                }
+                affiliateCommission = 0;
               }
             } else {
-              // It's Ayoub, but NOT the coaching product. Ayoub only gets commission on the coaching product.
               affiliateCommission = 0;
               console.log(`SyncStripe: AYOUB - Session ${session.id} - Product ${actualProductIdInSession} is not the coaching product (${AYOUB_COACHING_PRODUCT_ID}). No commission for Ayoub.`);
-              if (isProblematicSession) {
-                console.log(`🔍 PROBLEMATIC - AYOUB COMMISSION: Wrong product, commission $0`);
-              }
             }
           }
-        } else if (affiliateCode) { // For other affiliates (Nic, Maru, etc.)
-          // ... keep existing code (general affiliate commission calculation)
+        } else if (affiliateCode) {
+          // For other affiliates (Nic, Maru, etc.)
           console.log(`SyncStripe: Processing session ${session.id} for general affiliate: ${affiliateCode}.`);
           const { data: affiliateDetails, error: fetchRateError } = await supabaseClient
             .from('affiliates')
@@ -328,16 +294,12 @@ serve(async (req) => {
             const commissionRate = affiliateDetails.commission_rate;
             affiliateCommission = amountPaid * commissionRate;
             console.log(`SyncStripe: Calculated commission for ${affiliateCode} (Session: ${session.id}): AmountPaid $${amountPaid} * Rate ${commissionRate} = $${affiliateCommission.toFixed(2)}`);
+            
+            // SPECIAL LOGGING FOR NIC
+            if (affiliateCode === 'nic') {
+              console.log(`🚨 NIC COMMISSION CALCULATION: Session ${session.id}, Amount: $${amountPaid}, Rate: ${commissionRate}, Commission: $${affiliateCommission.toFixed(2)}`);
+            }
           }
-        }
-
-        if (isProblematicSession) {
-          console.log(`🔍 PROBLEMATIC - FINAL RESULT for session ${session.id}:`);
-          console.log(`🔍 PROBLEMATIC - Will be saved with affiliate: ${affiliateCode}`);
-          console.log(`🔍 PROBLEMATIC - Commission: $${affiliateCommission}`);
-          console.log(`🔍 PROBLEMATIC - Product: ${actualProductIdInSession}`);
-          console.log(`🔍 PROBLEMATIC - Amount paid: $${amountPaid}`);
-          console.log(`🔍 PROBLEMATIC - Session payment status: ${session.payment_status}`);
         }
 
         const record = {
@@ -346,13 +308,18 @@ serve(async (req) => {
           customer_email: session.customer_details?.email || null,
           amount_paid: amountPaid,
           affiliate_commission: parseFloat(affiliateCommission.toFixed(2)),
-          promo_code_name: affiliateCode, // Store internal affiliate code
-          promo_code_id: stripePromotionCodeId || "no_discount", // Store Stripe promotion code ID or special marker
+          promo_code_name: affiliateCode,
+          promo_code_id: stripePromotionCodeId || "no_discount",
           product_id: actualProductIdInSession,
           product_name: session.line_items?.data?.[0]?.description || null,
           created_at: new Date(session.created * 1000).toISOString(),
           refreshed_at: new Date().toISOString()
         };
+
+        // SPECIAL LOGGING FOR NIC'S RECORDS
+        if (affiliateCode === 'nic') {
+          console.log(`🚨 NIC RECORD CREATED:`, JSON.stringify(record, null, 2));
+        }
 
         commissionRecords.push(record);
         processedCount++;
@@ -367,6 +334,13 @@ serve(async (req) => {
     }
 
     console.log(`Found ${commissionRecords.length} affiliate commission records`);
+    
+    // LOG NIC'S RECORDS SPECIFICALLY
+    const nicRecords = commissionRecords.filter(r => r.promo_code_name === 'nic');
+    console.log(`🚨 NIC RECORDS FOUND: ${nicRecords.length}`);
+    if (nicRecords.length > 0) {
+      console.log(`🚨 NIC RECORDS:`, JSON.stringify(nicRecords, null, 2));
+    }
 
     // Before saving new records, delete ALL existing records for this period to ensure clean data
     console.log(`Deleting existing records for ${year}-${month} to ensure clean data...`);
@@ -374,7 +348,7 @@ serve(async (req) => {
       .from('promo_code_sales')
       .delete()
       .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString()); // Fixed: Use lte with endDate for proper month coverage
+      .lte('created_at', endDate.toISOString());
 
     if (deleteError) {
       console.error('Error deleting existing records:', deleteError);
@@ -390,6 +364,8 @@ serve(async (req) => {
       for (let i = 0; i < commissionRecords.length; i += batchSize) {
         const batch = commissionRecords.slice(i, i + batchSize);
         
+        console.log(`Saving batch ${Math.ceil((i + 1) / batchSize)}: ${batch.length} records`);
+        
         const { error: upsertError } = await supabaseClient
           .from('promo_code_sales')
           .upsert(batch, {
@@ -403,6 +379,21 @@ serve(async (req) => {
 
         savedCount += batch.length;
         console.log(`Saved batch ${Math.ceil((i + 1) / batchSize)}, total saved: ${savedCount}`);
+      }
+      
+      // FINAL CHECK FOR NIC'S DATA
+      const { data: nicCheck, error: nicCheckError } = await supabaseClient
+        .from('promo_code_sales')
+        .select('*')
+        .eq('promo_code_name', 'nic')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+      
+      if (!nicCheckError && nicCheck) {
+        console.log(`🚨 NIC DATA CHECK AFTER SAVE: Found ${nicCheck.length} records in database`);
+        if (nicCheck.length > 0) {
+          console.log(`🚨 NIC SAVED RECORDS:`, JSON.stringify(nicCheck, null, 2));
+        }
       }
     }
 
