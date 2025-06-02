@@ -141,6 +141,17 @@ export default function Dashboard() {
         Monthly View
       </div>;
   };
+  const getAyoubStartDateInfo = () => {
+    if (user?.affiliateCode === "ayoub") {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-green-500/10 px-3 py-1 rounded-full">
+          <TrendingUp className="w-4 h-4" />
+          Affiliate since May 20, 2025
+        </div>
+      );
+    }
+    return null;
+  };
   const isDataLoading = affiliateIsLoading || monthSwitching;
   const renderDashboardContent = () => {
     console.log("Rendering dashboard content - conditions check:");
@@ -277,6 +288,7 @@ export default function Dashboard() {
                     Here's what's happening with your affiliate account today.
                   </p>
                   {getViewTypeIndicator()}
+                  {getAyoubStartDateInfo()}
                 </div>
               </div>
             </div>
