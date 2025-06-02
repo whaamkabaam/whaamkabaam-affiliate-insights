@@ -1,137 +1,114 @@
 
-import { useAffiliate, Commission } from "@/contexts/AffiliateContext";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatDistanceToNow } from "date-fns";
-import { AlertCircle } from "lucide-react";
+import { useAffiliate } from "@/contexts/AffiliateContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatDistance } from "date-fns";
+import { censorEmail } from "@/utils/emailUtils";
+import { filterCommissions } from "@/utils/affiliateUtils";
 
 interface CommissionTableProps {
   limit?: number;
 }
 
 export function CommissionTable({ limit }: CommissionTableProps) {
-  const { commissions, isLoading, isAdmin } = useAffiliate();
+  const { commissions, isLoading } = useAffiliate();
+  const { user } = useAuth();
 
-  // Filter out any hardcoded example data
-  const filteredCommissions = commissions.filter(commission => 
-    commission.customerEmail && 
-    !commission.customerEmail.includes('unknown@example.com') &&
-    !commission.customerEmail.includes('example.com') &&
-    commission.customerEmail !== 'unknown@example.com'
-  );
+  // Filter commissions using the affiliate-specific filtering logic
+  const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
 
-  const displayCommissions = limit
+  const displayCommissions = limit 
     ? filteredCommissions.slice(0, limit)
     : filteredCommissions;
 
   if (isLoading) {
-    return <div className="text-center py-4">Loading commission data...</div>;
-  }
-
-  if (isAdmin) {
     return (
-      <div className="flex items-center justify-center py-4 text-muted-foreground">
-        <AlertCircle className="h-4 w-4 mr-2" />
-        <span>Detailed commission data is available in individual affiliate accounts</span>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Commission History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center space-x-4">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (displayCommissions.length === 0) {
     return (
-      <div className="text-center py-4 text-muted-foreground">
-        No commission data available for the selected period.
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Commission History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            No commission data available yet.
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return (
-      <div>
-        <div>{date.toLocaleDateString()}</div>
-        <div className="text-xs text-muted-foreground">
-          {formatDistanceToNow(date, { addSuffix: true })}
-        </div>
-      </div>
-    );
-  };
-
-  const formatProductName = (productId: string) => {
-    const products: Record<string, string> = {
-      "prod_RINO6yE0y4O9gX": "Live Custom Curve Settings",
-      "prod_RINKAvP3L2kZeV": "Premium Personalized Custom Curve Settings",
-      "prod_RINJvQw1Qw1Qw1Q": "Enterprise Membership",
-    };
-    
-    return products[productId] || productId;
-  };
-
-  const formatCustomerName = (email: string) => {
-    // Extract name from email (assuming format is firstname.lastname@domain.com)
-    const [namePart] = email.split('@');
-    let firstName = '';
-    let lastName = '';
-    
-    if (namePart.includes('.')) {
-      // If email has format firstname.lastname@domain
-      [firstName, lastName] = namePart.split('.');
-    } else {
-      // If no period in the name part, assume the whole thing is the first name
-      firstName = namePart;
-      lastName = '';
-    }
-    
-    // Capitalize first letters for better display
-    firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
-    if (lastName) {
-      lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
-    }
-    
-    // Format first name (first letter + *** + last letter)
-    let formattedFirstName = firstName;
-    if (firstName.length > 2) {
-      formattedFirstName = `${firstName.charAt(0)}***${firstName.charAt(firstName.length - 1)}`;
-    }
-    
-    // Format last name (just first letter with a period)
-    const formattedLastName = lastName ? `${lastName.charAt(0)}.` : '';
-    
-    return `${formattedFirstName} ${formattedLastName}`.trim();
-  };
-
   return (
-    <div className="border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Product</TableHead>
-            <TableHead className="text-right">Commission</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {displayCommissions.map((commission) => (
-            <TableRow key={commission.sessionId}>
-              <TableCell>{formatDate(commission.date)}</TableCell>
-              <TableCell>
-                {formatCustomerName(commission.customerEmail)}
-              </TableCell>
-              <TableCell>{formatProductName(commission.productId)}</TableCell>
-              <TableCell className="text-right font-medium text-primary">
-                ${commission.commission.toFixed(2)}
-              </TableCell>
+    <Card>
+      <CardHeader>
+        <CardTitle>Commission History</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead className="text-right">Commission</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {displayCommissions
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map((commission, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="font-medium">
+                        {new Date(commission.date).toLocaleDateString()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDistance(new Date(commission.date), new Date(), { addSuffix: true })}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">
+                      {censorEmail(commission.customerEmail)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-xs">
+                      {commission.productName || "Unknown Product"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-green-600">
+                    ${commission.commission.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

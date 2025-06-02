@@ -12,6 +12,7 @@ import { MonthPicker } from "@/components/MonthPicker";
 import { DollarSign, Users, TrendingUp, Calendar, Loader2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+
 export default function Dashboard() {
   const {
     user,
@@ -252,7 +253,12 @@ export default function Dashboard() {
               >
                 {dataRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
-              <Button variant="outline" size="sm" disabled={!user?.affiliateCode}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={!user?.affiliateCode}
+                onClick={() => navigate('/dashboard/analytics')}
+              >
                 View All
               </Button>
             </div>

@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -13,6 +12,7 @@ import { SearchIcon, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { censorEmail } from "@/utils/emailUtils";
+import { filterCommissions } from "@/utils/affiliateUtils";
 
 interface CustomerData {
   email: string;
@@ -33,9 +33,12 @@ export default function Customers() {
 
   // Process commissions data to get customer information
   const processCustomerData = useCallback(() => {
+    // Filter commissions using the affiliate-specific filtering logic
+    const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
+    
     const customerMap: Record<string, CustomerData> = {};
     
-    commissions.forEach(commission => {
+    filteredCommissions.forEach(commission => {
       if (!commission.customerEmail) return;
       
       if (!customerMap[commission.customerEmail]) {
@@ -60,7 +63,7 @@ export default function Customers() {
     });
     
     setCustomers(Object.values(customerMap));
-  }, [commissions]);
+  }, [commissions, user?.affiliateCode]);
 
   const handleMonthChange = useCallback(async (year: number, month: number) => {
     setIsLoading(true);

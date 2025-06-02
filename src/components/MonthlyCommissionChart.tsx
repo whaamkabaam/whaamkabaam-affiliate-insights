@@ -44,17 +44,27 @@ export function MonthlyCommissionChart() {
           const startDate = new Date(currentYear, month - 1, 1).toISOString();
           const endDate = new Date(currentYear, month, 0, 23, 59, 59).toISOString();
           
+          // For Ayoub, filter out commissions before May 20, 2025
+          let dateFilter = `gte.${startDate}`;
+          if (user.affiliateCode === 'ayoub') {
+            const ayoubStartDate = new Date('2025-05-20T00:00:00Z').toISOString();
+            // Use the later of the month start or Ayoub's start date
+            const effectiveStartDate = startDate > ayoubStartDate ? startDate : ayoubStartDate;
+            dateFilter = `gte.${effectiveStartDate}`;
+          }
+          
           // Query database directly for this affiliate's commission total for this month
-          // Filter out hardcoded examples in the query
+          // Filter out hardcoded examples and $0 commissions
           const { data: monthlyData, error: queryError } = await supabase
             .from('promo_code_sales')
             .select('affiliate_commission, customer_email')
             .eq('promo_code_name', user.affiliateCode)
-            .gte('created_at', startDate)
+            .filter('created_at', dateFilter)
             .lte('created_at', endDate)
             .not('customer_email', 'like', '%unknown@example.com%')
             .not('customer_email', 'like', '%example.com%')
-            .neq('customer_email', 'unknown@example.com');
+            .neq('customer_email', 'unknown@example.com')
+            .gt('affiliate_commission', 0); // Only include positive commissions
           
           if (queryError) {
             console.error(`Error fetching chart data for ${currentYear}-${month}:`, queryError);
@@ -71,7 +81,8 @@ export function MonthlyCommissionChart() {
             if (record.customer_email && 
                 !record.customer_email.includes('unknown@example.com') &&
                 !record.customer_email.includes('example.com') &&
-                record.customer_email !== 'unknown@example.com') {
+                record.customer_email !== 'unknown@example.com' &&
+                record.affiliate_commission > 0) {
               return sum + (Number(record.affiliate_commission) || 0);
             }
             return sum;

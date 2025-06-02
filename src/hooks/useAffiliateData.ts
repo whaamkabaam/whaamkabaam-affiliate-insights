@@ -161,7 +161,8 @@ export const useAffiliateData = (
       const rawCommissions = data.commissions || [];
       setCommissions(rawCommissions);
       
-      const calculatedSummary = calculateSummary(rawCommissions);
+      // Calculate summary with affiliate-specific filtering
+      const calculatedSummary = calculateSummary(rawCommissions, user.affiliateCode);
       setSummary(calculatedSummary);
 
     } catch (err) {
