@@ -1,5 +1,4 @@
-
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Commission, CommissionSummary, AffiliateOverview } from "@/types/affiliate";
@@ -18,6 +17,9 @@ export const useAffiliateData = (
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number>(0);
   const [currentFetchKey, setCurrentFetchKey] = useState<string | null>(null);
   const [lastFetchedMonthYear, setLastFetchedMonthYear] = useState<string | null>(null);
+  
+  // FIXED: Track ongoing fetch operations to prevent duplicates
+  const ongoingFetches = useRef<Set<string>>(new Set());
 
   // Function for admin to fetch overview of all affiliates with retry mechanism
   const fetchAffiliateOverviews = useCallback(async (retryCount = 0, force = false) => {
@@ -100,30 +102,37 @@ export const useAffiliateData = (
     const fetchKey = `${user.affiliateCode}-${year}-${month}`;
     const monthYearKey = `${year}-${month}`;
     
-    const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
-    const shouldForceFetch = forceRefresh || isMonthYearChange;
-    
-    if (currentFetchKey === fetchKey && isLoading && !shouldForceFetch) {
+    // FIXED: Prevent duplicate fetches for the same key
+    if (ongoingFetches.current.has(fetchKey)) {
       console.log(`Already fetching data for ${fetchKey}, skipping duplicate request`);
       return;
     }
+
+    const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
+    const shouldForceFetch = forceRefresh || isMonthYearChange;
+    
+    // FIXED: Only sync for current month or when explicitly forced, not for every month change
+    const shouldSync = forceRefresh || (isMonthYearChange && (year === 0 || month === 0 || month === new Date().getMonth() + 1));
     
     setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);
     setIsLoading(true);
     setError(null);
+    
+    // Mark this fetch as ongoing
+    ongoingFetches.current.add(fetchKey);
 
     try {
-      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, forceRefresh: ${shouldForceFetch}, isMonthYearChange: ${isMonthYearChange}`);
+      console.log(`Fetching data for ${user.affiliateCode}, year: ${year}, month: ${month}, shouldSync: ${shouldSync}`);
       
-      if (shouldForceFetch) {
-        console.log("Force refresh or month change detected, syncing from Stripe...");
+      if (shouldSync) {
+        console.log("Syncing from Stripe...");
         
         const { error: syncError } = await supabase.functions.invoke("sync-stripe-data", {
           body: {
             year,
             month,
-            forceRefresh: true
+            forceRefresh: shouldForceFetch
           }
         });
 
@@ -156,7 +165,7 @@ export const useAffiliateData = (
         return;
       }
 
-      console.log(`Received ${data.commissions?.length || 0} commissions`);
+      console.log(`Received ${data.commissions?.length || 0} commissions for ${user.affiliateCode}`);
       
       const rawCommissions = data.commissions || [];
       setCommissions(rawCommissions);
@@ -171,8 +180,10 @@ export const useAffiliateData = (
     } finally {
       setIsLoading(false);
       setCurrentFetchKey(null);
+      // Remove from ongoing fetches
+      ongoingFetches.current.delete(fetchKey);
     }
-  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, isLoading, currentFetchKey, lastFetchedMonthYear]);
+  }, [isAuthenticated, user, isAdmin, fetchAffiliateOverviews, lastFetchedMonthYear]);
 
   return {
     commissions,

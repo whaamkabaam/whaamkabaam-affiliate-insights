@@ -45,13 +45,14 @@ export default function Login() {
         </div>
         <p className="text-sm mb-2">
           <strong>Admin:</strong> admin@whaamkabaam.com / AdminTest123<br />
-          <strong>Affiliate:</strong> ayoub@whaamkabaam.com / AyoubTest123
+          <strong>Nic:</strong> nic@whaamkabaam.com / Test1234!<br />
+          <strong>Ayoub:</strong> ayoub@whaamkabaam.com / AyoubTest123
         </p>
         <div className="flex items-center justify-center text-xs text-amber-300">
           <Info className="h-3 w-3 mr-1" />
           <span>Be sure to initialize users before attempting to log in</span>
         </div>
-        <div className="mt-4 flex justify-center gap-2">
+        <div className="mt-4 flex justify-center gap-2 flex-wrap">
           <Button 
             variant="outline" 
             size="sm" 
@@ -60,7 +61,17 @@ export default function Login() {
               navigator.clipboard.writeText('admin@whaamkabaam.com\nAdminTest123');
             }}
           >
-            Copy Admin Credentials
+            Copy Admin
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs bg-white/10 hover:bg-white/20 border-white/20"
+            onClick={() => {
+              navigator.clipboard.writeText('nic@whaamkabaam.com\nTest1234!');
+            }}
+          >
+            Copy Nic
           </Button>
           <Button 
             variant="outline" 
@@ -70,7 +81,7 @@ export default function Login() {
               navigator.clipboard.writeText('ayoub@whaamkabaam.com\nAyoubTest123');
             }}
           >
-            Copy Affiliate Credentials
+            Copy Ayoub
           </Button>
         </div>
       </div>

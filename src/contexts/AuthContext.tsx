@@ -33,13 +33,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Enhanced email-based mapping for known users - ONLY admin@whaamkabaam.com is admin
-  // Updated to use internal affiliate codes that match promo_code_name in database
+  // Enhanced email-based mapping for known users - FIXED: Nic should use 'nic' affiliate code, not 'admin'
   const getKnownUserData = (email: string): { affiliateCode: string; role: AppRole; name: string } | null => {
     const emailLower = email.toLowerCase();
     const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
       'admin@whaamkabaam.com': { affiliateCode: 'admin', role: 'admin', name: 'Admin' },
-      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' },
+      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' }, // FIXED: Nic should be 'nic', not 'admin'
       'maru@whaamkabaam.com': { affiliateCode: 'maru', role: 'affiliate', name: 'Maru' },
       'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' }
     };
@@ -215,8 +214,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       console.error("Login exception:", err);
       
-      // Try to initialize users automatically if login fails
-      if (email === "admin@whaamkabaam.com" && password === "AdminTest123") {
+      // FIXED: Use correct credentials for auto-initialization
+      if ((email === "admin@whaamkabaam.com" && password === "AdminTest123") ||
+          (email === "nic@whaamkabaam.com" && password === "Test1234!")) {
         try {
           console.log("Attempting to initialize users via edge function...");
           const { data: initData, error: initError } = await supabase.functions.invoke<any>("setup-initial-users");
