@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -30,11 +31,14 @@ export default function Customers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasFetched, setHasFetched] = useState(false);
 
   // Process commissions data to get customer information
   const processCustomerData = useCallback(() => {
+    console.log(`Customers: Processing ${commissions.length} commissions`);
     // Filter commissions using the affiliate-specific filtering logic
     const filteredCommissions = filterCommissions(commissions, user?.affiliateCode);
+    console.log(`Customers: After filtering, ${filteredCommissions.length} commissions remain`);
     
     const customerMap: Record<string, CustomerData> = {};
     
@@ -62,17 +66,22 @@ export default function Customers() {
       }
     });
     
-    setCustomers(Object.values(customerMap));
+    const customerList = Object.values(customerMap);
+    console.log(`Customers: Processed ${customerList.length} unique customers`);
+    setCustomers(customerList);
   }, [commissions, user?.affiliateCode]);
 
   const handleMonthChange = useCallback(async (year: number, month: number) => {
+    console.log(`Customers: Month changed to ${year}-${month}`);
     setIsLoading(true);
     setSelectedYear(year);
     setSelectedMonth(month);
+    setHasFetched(false);
     
     if (user?.affiliateCode) {
       try {
         await fetchCommissionData(year, month, false);
+        setHasFetched(true);
       } catch (error) {
         console.error("Error fetching customer data:", error);
         toast.error("Failed to load customer data");
@@ -84,16 +93,21 @@ export default function Customers() {
     }
   }, [user?.affiliateCode, fetchCommissionData]);
 
+  // Initial data fetch
   useEffect(() => {
-    if (user?.affiliateCode) {
+    if (user?.affiliateCode && !hasFetched) {
+      console.log(`Customers: Initial fetch for ${user.affiliateCode}`);
       handleMonthChange(selectedYear, selectedMonth);
     }
-  }, [user?.affiliateCode, handleMonthChange, selectedYear, selectedMonth]);
+  }, [user?.affiliateCode, selectedYear, selectedMonth, hasFetched, handleMonthChange]);
 
+  // Process data when commissions change
   useEffect(() => {
-    processCustomerData();
-    setIsLoading(false);
-  }, [processCustomerData]);
+    if (commissions.length > 0) {
+      processCustomerData();
+      setIsLoading(false);
+    }
+  }, [commissions, processCustomerData]);
 
   const filteredCustomers = customers.filter(customer =>
     customer.email.toLowerCase().includes(searchQuery.toLowerCase())

@@ -153,6 +153,7 @@ serve(async (req) => {
     for (const session of allSessions) {
       try {
         const sessionDate = new Date(session.created * 1000);
+        const actualProductIdInSession = session.line_items?.data?.[0]?.price?.product || null;
         
         // Check if session has affiliate discount
         let stripePromotionCodeId = null;
@@ -171,20 +172,24 @@ serve(async (req) => {
           }
         }
 
-        // Skip sessions without promo codes
-        if (!stripePromotionCodeId) {
-          continue;
+        // Handle Ayoub's special case: coaching product sales without discount codes
+        if (!stripePromotionCodeId && actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && sessionDate >= AYOUB_START_DATE) {
+          // This is a coaching product sale with no discount code after Ayoub's start date
+          // Check if it's after Ayoub's start date and assign to Ayoub
+          console.log(`Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
+          affiliateCode = AYOUB_AFFILIATE_CODE;
+          stripePromotionCodeId = "no_discount_ayoub_coaching"; // Special identifier for tracking
+        } else if (stripePromotionCodeId) {
+          // Map Stripe promotion code to internal affiliate code
+          affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
         }
-
-        // Map Stripe promotion code to internal affiliate code
-        affiliateCode = stripeToAffiliateMap[stripePromotionCodeId];
         
+        // Skip sessions without affiliate assignment
         if (!affiliateCode) {
-          console.log(`No affiliate mapping found for Stripe promotion code: ${stripePromotionCodeId}`);
           continue;
         }
 
-        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId})`);
+        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'})`);
 
         // --- Updated commission logic for Ayoub's date filter ---
         const amountPaid = (session.amount_total || 0) / 100;
@@ -196,8 +201,7 @@ serve(async (req) => {
             console.log(`SyncStripe: Ayoub session ${session.id} is before start date ${AYOUB_START_DATE.toISOString()}, skipping commission.`);
             affiliateCommission = 0;
           } else {
-            const actualProductIdInSession = session.line_items?.data?.[0]?.price?.product || null;
-            console.log(`SyncStripe: Processing session ${session.id} for AYOUB. Product: ${actualProductIdInSession}. Promo code on session: ${stripePromotionCodeId}. Date: ${sessionDate.toISOString()}`);
+            console.log(`SyncStripe: Processing session ${session.id} for AYOUB. Product: ${actualProductIdInSession}. Promo code on session: ${stripePromotionCodeId || 'none'}. Date: ${sessionDate.toISOString()}`);
 
             if (actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID) {
               let ayoubQualifiesForFlatCommission = false;
@@ -254,8 +258,8 @@ serve(async (req) => {
           amount_paid: amountPaid,
           affiliate_commission: parseFloat(affiliateCommission.toFixed(2)),
           promo_code_name: affiliateCode, // Store internal affiliate code
-          promo_code_id: stripePromotionCodeId, // Store Stripe promotion code ID
-          product_id: session.line_items?.data?.[0]?.price?.product || null,
+          promo_code_id: stripePromotionCodeId || "no_discount", // Store Stripe promotion code ID or special marker
+          product_id: actualProductIdInSession,
           product_name: session.line_items?.data?.[0]?.description || null,
           created_at: new Date(session.created * 1000).toISOString(),
           refreshed_at: new Date().toISOString()
