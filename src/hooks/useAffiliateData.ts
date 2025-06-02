@@ -110,13 +110,11 @@ export const useAffiliateData = (
     }
 
     const isMonthYearChange = lastFetchedMonthYear !== monthYearKey;
-    const shouldForceFetch = forceRefresh || isMonthYearChange;
     
-    // FIXED: Auto-sync for "All Time" view and current month to ensure latest data
+    // OPTIMIZED: Only sync when explicitly requested or for current month data
     const currentDate = new Date();
     const isCurrentMonth = year === currentDate.getFullYear() && month === (currentDate.getMonth() + 1);
-    const isAllTimeView = year === 0 && month === 0;
-    const shouldSync = forceRefresh || isAllTimeView || isCurrentMonth;
+    const shouldSync = forceRefresh || (isCurrentMonth && isMonthYearChange);
     
     setLastFetchedMonthYear(monthYearKey);
     setCurrentFetchKey(fetchKey);
@@ -136,7 +134,7 @@ export const useAffiliateData = (
           body: {
             year,
             month,
-            forceRefresh: shouldForceFetch
+            forceRefresh
           }
         });
 

@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,7 +63,7 @@ export default function Dashboard() {
     }
   }, [selectedYear, selectedMonth, user?.affiliateCode, fetchCommissionData]);
 
-  // Single effect for initial data fetching
+  // OPTIMIZED: Single effect for initial data fetching with better conditions
   useEffect(() => {
     // Wait for authentication to complete
     if (authIsLoading) {
@@ -73,12 +72,10 @@ export default function Dashboard() {
     }
 
     // Only proceed if we have a user with an affiliate code and haven't fetched initial data
-    if (user?.affiliateCode && !affiliateIsLoading && !initialDataFetched) {
+    if (user?.affiliateCode && !initialDataFetched && !affiliateIsLoading) {
       console.log("Fetching initial commission data for affiliate:", user.affiliateCode, "Year:", selectedYear, "Month:", selectedMonth);
       setInitialDataFetched(true);
-      fetchCommissionData(selectedYear, selectedMonth, false).then(() => {
-        console.log("Initial commission data fetch completed successfully");
-      }).catch(err => {
+      fetchCommissionData(selectedYear, selectedMonth, false).catch(err => {
         console.error("Initial commission data fetch failed:", err);
         setInitialDataFetched(false); // Allow retry on error
       });
