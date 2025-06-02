@@ -229,13 +229,16 @@ export default function Dashboard() {
             icon={isDataLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
             isLoading={isDataLoading}
           />
-          <StatsCard
-            title="Your Code"
-            value={user?.affiliateCode || "N/A"}
-            description="Share this code with your audience"
-            className="bg-secondary/10"
-            showCopyButton={true}
-          />
+          {/* Only show "Your Code" section if user is not Ayoub */}
+          {user?.affiliateCode !== 'ayoub' && (
+            <StatsCard
+              title="Your Code"
+              value={user?.affiliateCode || "N/A"}
+              description="Share this code with your audience"
+              className="bg-secondary/10"
+              showCopyButton={true}
+            />
+          )}
         </div>
 
         <div className="grid gap-4">

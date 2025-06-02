@@ -144,12 +144,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Set a robust minimal user
             const knownUserData = newSession.user.email ? getKnownUserData(newSession.user.email) : null;
             
-            setUser({
+            const fallbackUser = {
               ...newSession.user,
               role: knownUserData?.role || 'affiliate',
               affiliateCode: knownUserData?.affiliateCode,
               name: knownUserData?.name || newSession.user.email?.split('@')[0] || "User"
-            });
+            };
+            
+            setUser(fallbackUser);
             setIsAdmin(knownUserData?.role === 'admin' || false);
           }
         } else {
