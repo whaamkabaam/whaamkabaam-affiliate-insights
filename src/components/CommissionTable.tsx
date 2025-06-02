@@ -123,6 +123,6 @@ export function CommissionTable({ limit }: CommissionTableProps) {
           </Table>
         </div>
       </CardContent>
-    );
-  }
+    </Card>
+  );
 }
