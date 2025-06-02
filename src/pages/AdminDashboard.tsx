@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAffiliate } from "@/contexts/AffiliateContext";
@@ -41,6 +42,7 @@ export default function AdminDashboard() {
   const [progressPolling, setProgressPolling] = useState<NodeJS.Timeout | null>(null);
   const [userCredentials, setUserCredentials] = useState<UserCredential[]>([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [initialDataFetched, setInitialDataFetched] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -53,12 +55,17 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Only fetch last sync time, remove the duplicate fetchAffiliateOverviews call
-    // that was causing the re-rendering loop
-    const timer = setTimeout(fetchLastSyncTime, 500);
-    
-    return () => clearTimeout(timer);
-  }, [isAuthenticated, isAdmin, navigate]);
+    // Fetch initial data only once when component mounts
+    if (!initialDataFetched) {
+      const timer = setTimeout(() => {
+        fetchLastSyncTime();
+        fetchAffiliateOverviews();
+        setInitialDataFetched(true);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, isAdmin, navigate, initialDataFetched, fetchAffiliateOverviews]);
   
   // Display any errors that might occur
   useEffect(() => {
@@ -112,7 +119,7 @@ export default function AdminDashboard() {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [syncingStripe]);
+  }, [syncingStripe, fetchAffiliateOverviews]);
 
   const fetchLastSyncTime = async () => {
     try {

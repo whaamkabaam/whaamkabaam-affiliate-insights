@@ -20,27 +20,8 @@ export const AffiliateProvider = ({ children }: { children: ReactNode }) => {
     setLastFetchedMonthYear
   } = useAffiliateData(isAuthenticated, isAdmin, user);
 
-  // Effect to fetch initial affiliate overview data for admin users with delayed initialization
-  useEffect(() => {
-    let isMounted = true;
-    
-    if (isAuthenticated && isAdmin) {
-      const timer = setTimeout(() => {
-        if (isMounted) {
-          fetchAffiliateOverviews(0, true);
-        }
-      }, 500);
-      
-      return () => {
-        isMounted = false;
-        clearTimeout(timer);
-      };
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [isAuthenticated, isAdmin, fetchAffiliateOverviews]);
+  // Remove the automatic fetching that was causing the infinite loop
+  // Admin dashboard will manually call fetchAffiliateOverviews when needed
 
   // Reset tracking when the user changes
   useEffect(() => {
