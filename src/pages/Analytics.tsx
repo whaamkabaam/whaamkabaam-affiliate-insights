@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -319,10 +318,10 @@ export default function Analytics() {
                                 <Cell 
                                   key={`cell-${index}`} 
                                   fill={COLORS[index % COLORS.length]}
-                                  stroke={hoveredProduct !== entry.name ? '#ffffff' : 'none'}
-                                  strokeWidth={hoveredProduct !== entry.name ? 2 : 0}
+                                  stroke={hoveredProduct === entry.name ? '#ffffff' : 'none'}
+                                  strokeWidth={hoveredProduct === entry.name ? 3 : 0}
                                   style={{
-                                    filter: hoveredProduct !== entry.name ? 'brightness(1.1)' : 'none',
+                                    filter: hoveredProduct === entry.name ? 'brightness(1.2) drop-shadow(0 4px 8px rgba(0,0,0,0.3))' : 'none',
                                     transition: 'all 0.3s ease'
                                   }}
                                 />
