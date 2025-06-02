@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Loader2, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { filterCommissions } from "@/utils/affiliateUtils";
 
 export function MonthlyCommissionChart() {
   const { isAdmin } = useAffiliate();
@@ -43,7 +42,7 @@ export function MonthlyCommissionChart() {
           
           // Calculate date range for this month
           const startDate = new Date(currentYear, month - 1, 1).toISOString();
-          const endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();
+          const endDate = new Date(currentYear, month, 0, 23, 59, 59).toISOString();
           
           // For Ayoub, filter out commissions before May 20, 2025
           let dateFilter = `gte.${startDate}`;
@@ -55,6 +54,7 @@ export function MonthlyCommissionChart() {
           }
           
           // Query database directly for this affiliate's commission total for this month
+          // Filter out hardcoded examples and $0 commissions
           const { data: monthlyData, error: queryError } = await supabase
             .from('promo_code_sales')
             .select('affiliate_commission, customer_email')
