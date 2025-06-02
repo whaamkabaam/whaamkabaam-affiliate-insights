@@ -8,9 +8,10 @@ import { MonthPicker } from "@/components/MonthPicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CommissionTable } from "@/components/CommissionTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { filterCommissions } from "@/utils/affiliateUtils";
-import { AlertCircle, TrendingUp } from "lucide-react";
+import { getProductName } from "@/utils/productUtils";
+import { AlertCircle } from "lucide-react";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -67,20 +68,13 @@ export default function Analytics() {
   // Check if we have any real data
   const hasRealData = realCommissions.length > 0;
 
-  // Only calculate charts and product data if we have real data
+  // Only calculate product data if we have real data
   let productChartData: { name: string; value: number }[] = [];
-  let dailyChartData: { day: string; amount: number }[] = [];
 
   if (hasRealData) {
     // Calculate product distribution based on actual commission amounts
     const productData = realCommissions.reduce((acc: Record<string, { name: string, value: number }>, commission) => {
-      const productMap: Record<string, string> = {
-        "prod_RINKAvP3L2kZeV": "Basic",
-        "prod_RINJvQw1Qw1Qw1Q": "Premium", 
-        "prod_RINO6yE0y4O9gX": "Enterprise",
-      };
-      
-      const productName = productMap[commission.productId] || "Other";
+      const productName = getProductName(commission.productId);
       
       if (!acc[productName]) {
         acc[productName] = { name: productName, value: 0 };
@@ -91,24 +85,6 @@ export default function Analytics() {
     }, {});
 
     productChartData = Object.values(productData);
-
-    // Calculate daily commission distribution
-    const dailyData = realCommissions.reduce((acc: Record<string, { day: string; amount: number }>, commission) => {
-      const date = new Date(commission.date);
-      const day = date.getDate().toString();
-      
-      if (!acc[day]) {
-        acc[day] = { day, amount: 0 };
-      }
-      
-      acc[day].amount += commission.commission;
-      return acc;
-    }, {});
-
-    // Sort by day number
-    dailyChartData = Object.values(dailyData).sort((a, b) => 
-      parseInt(a.day) - parseInt(b.day)
-    );
   }
 
   const COLORS = ['#FF3F4E', '#FFCC00', '#0088FE', '#00C49F'];
@@ -156,47 +132,7 @@ export default function Analytics() {
               </TabsList>
               
               <TabsContent value="overview" className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Daily Commission</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-80">
-                      {dailyChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={dailyChartData}
-                            margin={{
-                              top: 5,
-                              right: 30,
-                              left: 20,
-                              bottom: 5,
-                            }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="day" />
-                            <YAxis />
-                            <Tooltip 
-                              formatter={(value) => {
-                                if (typeof value === 'number') {
-                                  return `$${value.toFixed(2)}`;
-                                }
-                                return `$${value}`;
-                              }}
-                              labelFormatter={(label) => `Day ${label}`}
-                            />
-                            <Legend />
-                            <Bar dataKey="amount" fill="#FF3F4E" name="Commission ($)" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                          No daily commission data available
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  
+                <div className="grid gap-4 md:grid-cols-1">
                   <Card>
                     <CardHeader>
                       <CardTitle>Commission by Product</CardTitle>
@@ -251,7 +187,7 @@ export default function Analytics() {
                         productChartData.map((product, index) => (
                           <div key={product.name} className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <div className="font-medium">{product.name} Plan</div>
+                              <div className="font-medium">{product.name}</div>
                               <div className="text-sm text-muted-foreground">${product.value.toFixed(2)} Commission</div>
                             </div>
                             <div className="h-2 bg-muted rounded-full overflow-hidden">
