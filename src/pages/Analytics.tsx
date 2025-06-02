@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { filterCommissions } from "@/utils/affiliateUtils";
 import { getProductName } from "@/utils/productUtils";
-import { AlertCircle, TrendingUp, DollarSign, Package, Target, Users, BarChart3 } from "lucide-react";
+import { AlertCircle, TrendingUp, DollarSign, Package, Target, Users, BarChart3, Calendar } from "lucide-react";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -68,12 +69,13 @@ export default function Analytics() {
   // Check if we have any real data
   const hasRealData = realCommissions.length > 0;
 
-  // Enhanced product data calculation with more valuable metrics
+  // Enhanced product data calculation with monthly averages
   let productChartData: { 
     name: string; 
     value: number; 
     count: number; 
-    avgCommissionPerSale: number;
+    avgSalesPerMonth: number;
+    avgRevenuePerMonth: number;
     totalRevenue: number;
   }[] = [];
   let totalCommission = 0;
@@ -85,23 +87,37 @@ export default function Analytics() {
       name: string, 
       value: number, 
       count: number,
-      totalRevenue: number 
+      totalRevenue: number,
+      monthsActive: Set<string>
     }>, commission) => {
       const productName = getProductName(commission.productId);
+      const commissionDate = new Date(commission.date);
+      const monthKey = `${commissionDate.getFullYear()}-${commissionDate.getMonth()}`;
       
       if (!acc[productName]) {
-        acc[productName] = { name: productName, value: 0, count: 0, totalRevenue: 0 };
+        acc[productName] = { 
+          name: productName, 
+          value: 0, 
+          count: 0, 
+          totalRevenue: 0,
+          monthsActive: new Set()
+        };
       }
       
       acc[productName].value += commission.commission;
       acc[productName].count += 1;
       acc[productName].totalRevenue += commission.amount;
+      acc[productName].monthsActive.add(monthKey);
       return acc;
     }, {});
 
     productChartData = Object.values(productData).map(product => ({
-      ...product,
-      avgCommissionPerSale: product.value / product.count
+      name: product.name,
+      value: product.value,
+      count: product.count,
+      totalRevenue: product.totalRevenue,
+      avgSalesPerMonth: product.count / Math.max(product.monthsActive.size, 1),
+      avgRevenuePerMonth: product.totalRevenue / Math.max(product.monthsActive.size, 1)
     }));
     
     totalCommission = productChartData.reduce((sum, product) => sum + product.value, 0);
@@ -126,13 +142,13 @@ export default function Analytics() {
     </div>
   );
 
-  // Fixed Custom Tooltip for Pie Chart
+  // Fixed Custom Tooltip for Pie Chart with better positioning
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const percentage = ((data.value / totalCommission) * 100).toFixed(1);
       return (
-        <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg p-4 shadow-xl">
+        <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg p-4 shadow-xl z-50 max-w-xs">
           <p className="font-semibold text-foreground mb-2">{data.name}</p>
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">
@@ -151,11 +167,10 @@ export default function Analytics() {
     return null;
   };
 
-  // Enhanced Product Insights Card with valuable metrics
+  // Enhanced Product Insights Card with valuable monthly metrics
   const ProductInsightCard = ({ product, index, total }: { product: any, index: number, total: number }) => {
     const percentage = ((product.value / total) * 100);
     const isHovered = hoveredProduct === product.name;
-    const conversionValue = product.totalRevenue / product.count; // Average order value
     
     return (
       <div 
@@ -202,18 +217,18 @@ export default function Analytics() {
           <div className="space-y-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Target className="w-4 h-4 text-orange-500" />
-                <span className="text-sm text-muted-foreground">Avg Commission/Sale</span>
+                <Calendar className="w-4 h-4 text-orange-500" />
+                <span className="text-sm text-muted-foreground">Avg Sales/Month</span>
               </div>
-              <span className="font-semibold text-orange-500">${product.avgCommissionPerSale.toFixed(2)}</span>
+              <span className="font-semibold text-orange-500">{product.avgSalesPerMonth.toFixed(1)}</span>
             </div>
             
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 text-purple-500" />
-                <span className="text-sm text-muted-foreground">Avg Order Value</span>
+                <Target className="w-4 h-4 text-purple-500" />
+                <span className="text-sm text-muted-foreground">Avg Revenue/Month</span>
               </div>
-              <span className="font-semibold text-purple-500">${conversionValue.toFixed(2)}</span>
+              <span className="font-semibold text-purple-500">${product.avgRevenuePerMonth.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -292,8 +307,8 @@ export default function Analytics() {
                               fill="#8884d8"
                               dataKey="value"
                               stroke="none"
-                              onMouseEnter={(_, index) => {
-                                setHoveredProduct(productChartData[index].name);
+                              onMouseEnter={(entry) => {
+                                setHoveredProduct(entry.name);
                               }}
                               onMouseLeave={() => setHoveredProduct(null)}
                             >
@@ -310,7 +325,11 @@ export default function Analytics() {
                                 />
                               ))}
                             </Pie>
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip 
+                              content={<CustomTooltip />} 
+                              offset={20}
+                              position={{ x: 0, y: 0 }}
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                       ) : (
