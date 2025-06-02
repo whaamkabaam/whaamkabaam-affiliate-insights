@@ -13,16 +13,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AdminDashboardView } from "@/components/admin/AdminDashboardView";
+import { AdminNetworkOverview } from "@/components/admin/AdminNetworkOverview";
 
-// Define a type for the stripe sync progress value structure
 interface StripeSyncProgress {
   progress: number;
 }
 
 export default function AdminDashboard() {
   const { user, isAdmin, isAuthenticated } = useAuth();
-  const { affiliateOverviews, isLoading, fetchAffiliateOverviews } = useAffiliate();
+  const { fetchAffiliateOverviews } = useAffiliate();
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
   const [syncingStripe, setSyncingStripe] = useState(false);
@@ -42,7 +41,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Fetch initial data only once when component mounts
     if (!initialDataFetched) {
       const timer = setTimeout(() => {
         fetchLastSyncTime();
@@ -54,7 +52,6 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, isAdmin, navigate, initialDataFetched, fetchAffiliateOverviews]);
 
-  // Effect for polling progress during sync
   useEffect(() => {
     if (!syncingStripe) {
       if (progressPolling) {
@@ -64,7 +61,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Start polling for progress updates if we're syncing
     const pollInterval = setInterval(async () => {
       try {
         const { data, error } = await supabase
@@ -74,12 +70,10 @@ export default function AdminDashboard() {
           .single();
           
         if (!error && data) {
-          // Properly type check and handle the value structure
           const valueObj = data.value as unknown as StripeSyncProgress;
           if (valueObj && typeof valueObj.progress === 'number') {
             setSyncProgress(valueObj.progress);
             
-            // If progress is 100%, we're done
             if (valueObj.progress >= 100) {
               setSyncingStripe(false);
               fetchAffiliateOverviews();
@@ -91,9 +85,8 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error("Error polling progress:", err);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000);
     
-    // Store the interval ID, not the interval itself
     setProgressPolling(pollInterval);
     
     return () => {
@@ -107,9 +100,12 @@ export default function AdminDashboard() {
         .from('system_settings')
         .select('value, updated_at')
         .eq('key', 'last_stripe_refresh')
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching last sync time:", error);
+        return;
+      }
       
       if (data) {
         setLastSyncTime(data.updated_at);
@@ -120,14 +116,14 @@ export default function AdminDashboard() {
   };
 
   const handleRefresh = async () => {
-    if (isLoading || refreshing) return;
+    if (refreshing) return;
     
     setRefreshing(true);
     try {
       await fetchAffiliateOverviews();
-      toast.success("Affiliate data refreshed");
+      toast.success("Data refreshed");
     } catch (error) {
-      toast.error("Failed to refresh affiliate data");
+      toast.error("Failed to refresh data");
     } finally {
       setRefreshing(false);
     }
@@ -141,7 +137,6 @@ export default function AdminDashboard() {
     toast.info(fullRefresh ? "Starting full sync..." : "Starting incremental sync...");
     
     try {
-      // Initialize the progress tracking
       await supabase
         .from('system_settings')
         .upsert({
@@ -150,12 +145,11 @@ export default function AdminDashboard() {
           updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
       
-      // Call the edge function using Supabase client for admin sync (all affiliates)
       const { data, error } = await supabase.functions.invoke("sync-stripe-data", {
         method: "POST",
         body: { 
           fullRefresh,
-          affiliateCode: 'admin' // Admin syncs all data
+          affiliateCode: 'admin'
         }
       });
       
@@ -165,13 +159,12 @@ export default function AdminDashboard() {
       }
       
       if (data) {
-        toast.success(`Stripe data synced: ${data.stats?.saved || data.commissionsFound || 0} records processed, ${data.stats?.skipped || 0} skipped`);
+        toast.success(`Stripe data synced: ${data.stats?.saved || data.commissionsFound || 0} records processed`);
       } else {
         toast.warning("Sync completed but no statistics were returned");
       }
       
       fetchLastSyncTime();
-      // Only refresh affiliate overviews after the sync is complete
       await fetchAffiliateOverviews();
     } catch (error) {
       console.error("Error syncing Stripe data:", error);
@@ -187,26 +180,24 @@ export default function AdminDashboard() {
       <div className="flex-1">
         <DashboardHeader />
         <main className="p-6 space-y-6">
-          {/* Header Section */}
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Admin Control Center</h1>
               <p className="text-muted-foreground">
-                Complete oversight of affiliate network performance and system operations
+                Network oversight and system management
               </p>
             </div>
             <Button 
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={isLoading || refreshing}
+              disabled={refreshing}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
               Refresh Data
             </Button>
           </div>
 
-          {/* Main Content Tabs */}
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList>
               <TabsTrigger value="overview">Network Overview</TabsTrigger>
@@ -214,7 +205,7 @@ export default function AdminDashboard() {
             </TabsList>
             
             <TabsContent value="overview" className="space-y-4">
-              <AdminDashboardView />
+              <AdminNetworkOverview />
             </TabsContent>
             
             <TabsContent value="management" className="space-y-4">

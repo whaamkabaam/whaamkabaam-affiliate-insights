@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
@@ -17,7 +18,8 @@ export function MonthlyCommissionChart() {
     let isMounted = true;
     
     const fetchChartData = async () => {
-      if (!user?.affiliateCode || isAdmin) {
+      // For admin users, show placeholder
+      if (isAdmin || !user?.affiliateCode || user.affiliateCode === 'admin') {
         if (isMounted) {
           setChartData([]);
           setIsLoading(false);
@@ -29,38 +31,28 @@ export function MonthlyCommissionChart() {
       setError(null);
       
       const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1; // 1-based month
+      const currentMonth = new Date().getMonth() + 1;
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       
       try {
         const data = [];
-        // Include ALL months from January up to current month
         for (let month = 1; month <= currentMonth; month++) {
-          // Calculate proper date range for the ENTIRE month
           const startDate = new Date(currentYear, month - 1, 1, 0, 0, 0, 0).toISOString();
           
-          // FIXED: For current month, use current time as end date to capture latest sales
           let endDate;
           if (month === currentMonth) {
-            endDate = new Date().toISOString(); // Current time for current month
+            endDate = new Date().toISOString();
           } else {
-            endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString(); // Last day of month
+            endDate = new Date(currentYear, month, 0, 23, 59, 59, 999).toISOString();
           }
           
-          // Determine the effective start date for filtering commissions
           let effectiveFilterStartDate = startDate;
           
-          // For Ayoub, ensure commissions are not counted before May 20, 2025
           if (user.affiliateCode === 'ayoub') {
-            const ayoubSpecificMinStartDate = new Date(2025, 4, 20, 0, 0, 0, 0).toISOString(); // May 20, 2025
-            // Use the later of the two dates: the start of the month we are processing, or Ayoub's specific minimum start date
+            const ayoubSpecificMinStartDate = new Date(2025, 4, 20, 0, 0, 0, 0).toISOString();
             effectiveFilterStartDate = (new Date(startDate) > new Date(ayoubSpecificMinStartDate)) ? startDate : ayoubSpecificMinStartDate;
           }
           
-          console.log(`Chart: Querying month ${month}, start: ${effectiveFilterStartDate}, end: ${endDate}, affiliate: ${user.affiliateCode}`);
-          
-          // Query database directly for this affiliate's commission total for this month
-          // Filter out hardcoded examples and $0 commissions
           const { data: monthlyData, error: queryError } = await supabase
             .from('promo_code_sales')
             .select('affiliate_commission, customer_email, created_at')
@@ -70,7 +62,7 @@ export function MonthlyCommissionChart() {
             .not('customer_email', 'like', '%unknown@example.com%')
             .not('customer_email', 'like', '%example.com%')
             .neq('customer_email', 'unknown@example.com')
-            .gt('affiliate_commission', 0); // Only include positive commissions
+            .gt('affiliate_commission', 0);
           
           if (queryError) {
             console.error(`Error fetching chart data for ${currentYear}-${month}:`, queryError);
@@ -81,23 +73,16 @@ export function MonthlyCommissionChart() {
             continue;
           }
           
-          console.log(`Chart: Found ${monthlyData?.length || 0} records for month ${month}`);
-          
-          // Calculate total commission for this month from real customers only
           const totalCommission = monthlyData?.reduce((sum, record) => {
-            // Double check to filter out any remaining example data
             if (record.customer_email && 
                 !record.customer_email.includes('unknown@example.com') &&
                 !record.customer_email.includes('example.com') &&
                 record.customer_email !== 'unknown@example.com' &&
                 record.affiliate_commission > 0) {
-              console.log(`Chart: Including commission $${record.affiliate_commission} from ${record.customer_email} on ${record.created_at}`);
               return sum + (Number(record.affiliate_commission) || 0);
             }
             return sum;
           }, 0) || 0;
-          
-          console.log(`Chart: Total commission for month ${month}: $${totalCommission}`);
           
           if (isMounted) {
             data.push({
@@ -108,7 +93,6 @@ export function MonthlyCommissionChart() {
         }
         
         if (isMounted) {
-          console.log('Chart: Final data:', data);
           setChartData(data);
           setIsLoading(false);
         }
@@ -168,7 +152,7 @@ export function MonthlyCommissionChart() {
   }
 
   // For admin, show placeholder text instead of chart
-  if (isAdmin) {
+  if (isAdmin || user?.affiliateCode === 'admin') {
     return (
       <Card className="lg:col-span-4">
         <CardHeader>

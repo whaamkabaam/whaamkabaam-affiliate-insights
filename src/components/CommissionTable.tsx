@@ -20,10 +20,10 @@ interface CommissionTableProps {
 
 export function CommissionTable({ limit }: CommissionTableProps) {
   const { commissions, isLoading, error } = useAffiliate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   
-  // Check if user is a true admin (commission_rate > 0.5) rather than just an affiliate
-  const isAdmin = user?.role === 'admin' && user?.email?.toLowerCase() === 'admin@whaamkabaam.com';
+  // For admin users, show all network transactions by getting all commissions
+  const displayCommissions = isAdmin ? commissions : commissions;
 
   if (isLoading) {
     return (
@@ -62,30 +62,39 @@ export function CommissionTable({ limit }: CommissionTableProps) {
     );
   }
 
-  if (!commissions || commissions.length === 0) {
+  if (!displayCommissions || displayCommissions.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Commission Details</CardTitle>
-          <CardDescription>Your recent affiliate transactions</CardDescription>
+          <CardTitle>
+            {isAdmin ? "All Network Transactions" : "Commission Details"}
+          </CardTitle>
+          <CardDescription>
+            {isAdmin ? "Network-wide affiliate transactions" : "Your recent affiliate transactions"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            No transactions found for the selected period.
+            No transactions found.
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  const displayTransactions = limit ? commissions.slice(0, limit) : commissions;
+  const displayTransactions = limit ? displayCommissions.slice(0, limit) : displayCommissions;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Commission Details</CardTitle>
+        <CardTitle>
+          {isAdmin ? "All Network Transactions" : "Commission Details"}
+        </CardTitle>
         <CardDescription>
-          {limit ? `Latest ${limit} transactions` : 'All transactions'} for {user?.affiliateCode || 'your account'}
+          {isAdmin 
+            ? `Network-wide transactions${limit ? ` (latest ${limit})` : ""}`
+            : `${limit ? `Latest ${limit} transactions` : 'All transactions'} for ${user?.affiliateCode || 'your account'}`
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -96,6 +105,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Product</TableHead>
+                {isAdmin && <TableHead>Affiliate</TableHead>}
                 {isAdmin && <TableHead>Amount</TableHead>}
                 <TableHead>Commission</TableHead>
               </TableRow>
@@ -117,6 +127,13 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                       size="sm"
                     />
                   </TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <span className="px-2 py-1 bg-secondary rounded text-sm">
+                        {transaction.affiliateCode || 'Unknown'}
+                      </span>
+                    </TableCell>
+                  )}
                   {isAdmin && (
                     <TableCell>${transaction.amount?.toFixed(2) || '0.00'}</TableCell>
                   )}
