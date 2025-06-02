@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { filterCommissions } from "@/utils/affiliateUtils";
 import { getProductName } from "@/utils/productUtils";
-import { AlertCircle, TrendingUp, DollarSign, Package } from "lucide-react";
+import { AlertCircle, TrendingUp, DollarSign, Package, Target, Users, BarChart3 } from "lucide-react";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -69,26 +68,44 @@ export default function Analytics() {
   // Check if we have any real data
   const hasRealData = realCommissions.length > 0;
 
-  // Only calculate product data if we have real data
-  let productChartData: { name: string; value: number; count: number }[] = [];
+  // Enhanced product data calculation with more valuable metrics
+  let productChartData: { 
+    name: string; 
+    value: number; 
+    count: number; 
+    avgCommissionPerSale: number;
+    totalRevenue: number;
+  }[] = [];
   let totalCommission = 0;
+  let totalRevenue = 0;
 
   if (hasRealData) {
     // Calculate product distribution based on actual commission amounts
-    const productData = realCommissions.reduce((acc: Record<string, { name: string, value: number, count: number }>, commission) => {
+    const productData = realCommissions.reduce((acc: Record<string, { 
+      name: string, 
+      value: number, 
+      count: number,
+      totalRevenue: number 
+    }>, commission) => {
       const productName = getProductName(commission.productId);
       
       if (!acc[productName]) {
-        acc[productName] = { name: productName, value: 0, count: 0 };
+        acc[productName] = { name: productName, value: 0, count: 0, totalRevenue: 0 };
       }
       
       acc[productName].value += commission.commission;
       acc[productName].count += 1;
+      acc[productName].totalRevenue += commission.amount;
       return acc;
     }, {});
 
-    productChartData = Object.values(productData);
+    productChartData = Object.values(productData).map(product => ({
+      ...product,
+      avgCommissionPerSale: product.value / product.count
+    }));
+    
     totalCommission = productChartData.reduce((sum, product) => sum + product.value, 0);
+    totalRevenue = productChartData.reduce((sum, product) => sum + product.totalRevenue, 0);
   }
 
   const COLORS = ['#FF3F4E', '#FFCC00', '#0088FE', '#00C49F', '#8884d8', '#FF8042'];
@@ -109,7 +126,7 @@ export default function Analytics() {
     </div>
   );
 
-  // Custom Tooltip for Pie Chart
+  // Fixed Custom Tooltip for Pie Chart
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -134,10 +151,11 @@ export default function Analytics() {
     return null;
   };
 
-  // Product Performance Card Component
-  const ProductPerformanceCard = ({ product, index, total }: { product: any, index: number, total: number }) => {
+  // Enhanced Product Insights Card with valuable metrics
+  const ProductInsightCard = ({ product, index, total }: { product: any, index: number, total: number }) => {
     const percentage = ((product.value / total) * 100);
     const isHovered = hoveredProduct === product.name;
+    const conversionValue = product.totalRevenue / product.count; // Average order value
     
     return (
       <div 
@@ -162,36 +180,57 @@ export default function Analytics() {
           <Package className={`w-5 h-5 transition-colors ${isHovered ? 'text-primary' : 'text-muted-foreground'}`} />
         </div>
         
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Commission</span>
-            <span className="font-bold text-lg text-green-500">${product.value.toFixed(2)}</span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Sales Count</span>
-            <span className="font-semibold text-blue-500">{product.count}</span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Share</span>
-            <span className="font-semibold text-purple-500">{percentage.toFixed(1)}%</span>
-          </div>
-          
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-muted-foreground">Performance</span>
-              <span className="text-xs font-medium">{percentage.toFixed(1)}%</span>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="w-4 h-4 text-green-500" />
+                <span className="text-sm text-muted-foreground">Total Commission</span>
+              </div>
+              <span className="font-bold text-lg text-green-500">${product.value.toFixed(2)}</span>
             </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full rounded-full transition-all duration-500 ease-out"
-                style={{ 
-                  width: `${percentage}%`,
-                  backgroundColor: COLORS[index % COLORS.length]
-                }}
-              />
+            
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <BarChart3 className="w-4 h-4 text-blue-500" />
+                <span className="text-sm text-muted-foreground">Sales Count</span>
+              </div>
+              <span className="font-semibold text-blue-500">{product.count}</span>
             </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Target className="w-4 h-4 text-orange-500" />
+                <span className="text-sm text-muted-foreground">Avg Commission/Sale</span>
+              </div>
+              <span className="font-semibold text-orange-500">${product.avgCommissionPerSale.toFixed(2)}</span>
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="w-4 h-4 text-purple-500" />
+                <span className="text-sm text-muted-foreground">Avg Order Value</span>
+              </div>
+              <span className="font-semibold text-purple-500">${conversionValue.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs text-muted-foreground">Revenue Share</span>
+            <span className="text-xs font-medium">{percentage.toFixed(1)}%</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div 
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{ 
+                width: `${percentage}%`,
+                backgroundColor: COLORS[index % COLORS.length]
+              }}
+            />
           </div>
         </div>
       </div>
@@ -230,7 +269,7 @@ export default function Analytics() {
               </TabsList>
               
               <TabsContent value="overview" className="space-y-6">
-                {/* Combined Product Performance Section */}
+                {/* Enhanced Product Analytics Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Interactive Pie Chart */}
                   <Card className="lg:col-span-1 bg-gradient-to-br from-card to-card/50 border-border/50">
@@ -282,11 +321,11 @@ export default function Analytics() {
                     </CardContent>
                   </Card>
 
-                  {/* Product Performance Cards */}
+                  {/* Product Insights Cards */}
                   <div className="lg:col-span-2 space-y-4">
                     <div className="flex items-center gap-2 mb-4">
                       <TrendingUp className="w-5 h-5 text-primary" />
-                      <h2 className="text-xl font-semibold">Product Performance</h2>
+                      <h2 className="text-xl font-semibold">Product Insights</h2>
                     </div>
                     
                     {productChartData.length > 0 ? (
@@ -294,7 +333,7 @@ export default function Analytics() {
                         {productChartData
                           .sort((a, b) => b.value - a.value)
                           .map((product, index) => (
-                            <ProductPerformanceCard 
+                            <ProductInsightCard 
                               key={product.name}
                               product={product}
                               index={index}
