@@ -49,7 +49,7 @@ serve(async (req) => {
     console.log(`Fetching Stripe sessions from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
 
-    // Check if we need to refresh data
+    // For Ayoub, always force refresh to clean up incorrect data
     let shouldSync = forceRefresh;
     
     if (!shouldSync) {
@@ -83,6 +83,20 @@ serve(async (req) => {
     }
 
     console.log("Starting Stripe data sync...");
+
+    // CRITICAL: First, clean up any incorrect Ayoub data before syncing
+    console.log("Cleaning up incorrect Ayoub data...");
+    const { error: cleanupError } = await supabaseClient
+      .from('promo_code_sales')
+      .delete()
+      .eq('promo_code_name', 'ayoub')
+      .neq('product_id', AYOUB_COACHING_PRODUCT_ID);
+    
+    if (cleanupError) {
+      console.error("Error cleaning up incorrect Ayoub data:", cleanupError);
+    } else {
+      console.log("Successfully cleaned up incorrect Ayoub data");
+    }
 
     // Get affiliate mapping from database
     const { data: affiliates, error: affiliateError } = await supabaseClient
@@ -179,7 +193,7 @@ serve(async (req) => {
             actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
             sessionDate >= AYOUB_START_DATE) {
           // This is a coaching product sale with no discount code after Ayoub's start date
-          console.log(`Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
+          console.log(`AYOUB SPECIAL CASE: Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
           affiliateCode = AYOUB_AFFILIATE_CODE;
           stripePromotionCodeId = "no_discount_ayoub_coaching"; // Special identifier for tracking
         } else if (stripePromotionCodeId) {
@@ -190,6 +204,12 @@ serve(async (req) => {
         // Skip sessions without affiliate assignment
         if (!affiliateCode) {
           console.log(`No affiliate assignment for session ${session.id}, skipping`);
+          continue;
+        }
+
+        // CRITICAL CHECK: For Ayoub, double-check the product
+        if (affiliateCode === AYOUB_AFFILIATE_CODE && actualProductIdInSession !== AYOUB_COACHING_PRODUCT_ID) {
+          console.log(`CRITICAL: Ayoub assigned to non-coaching product ${actualProductIdInSession}, skipping session ${session.id}`);
           continue;
         }
 
@@ -228,6 +248,7 @@ serve(async (req) => {
 
               if (ayoubQualifiesForFlatCommission) {
                 affiliateCommission = AYOUB_FLAT_COMMISSION;
+                console.log(`SyncStripe: AYOUB - Final commission for session ${session.id}: $${AYOUB_FLAT_COMMISSION}`);
               } else {
                 affiliateCommission = 0; // Explicitly $0 if conditions not met for the coaching product
               }
