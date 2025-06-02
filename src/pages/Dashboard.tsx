@@ -12,6 +12,7 @@ import { MonthPicker } from "@/components/MonthPicker";
 import { DollarSign, Users, TrendingUp, Calendar, Loader2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Dashboard() {
   const {
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const [dataRefreshing, setDataRefreshing] = useState(false);
   const [monthSwitching, setMonthSwitching] = useState(false);
   const [initialDataFetched, setInitialDataFetched] = useState(false);
+  const [debugSyncTriggered, setDebugSyncTriggered] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging to track loading states
@@ -46,6 +48,30 @@ export default function Dashboard() {
       navigate("/admin");
     }
   }, [authIsLoading, isAdmin, navigate]);
+
+  // Special debug sync for Ayoub to capture May 2025 problematic sessions
+  useEffect(() => {
+    if (user?.affiliateCode === "ayoub" && !debugSyncTriggered && !authIsLoading) {
+      console.log("Triggering debug sync for Ayoub - May 2025");
+      setDebugSyncTriggered(true);
+      
+      // Trigger sync specifically for May 2025 to capture debug logs
+      supabase.functions.invoke("sync-stripe-data", {
+        body: {
+          year: 2025,
+          month: 5,
+          forceRefresh: true
+        }
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error("Debug sync error:", error);
+        } else {
+          console.log("Debug sync completed for May 2025:", data);
+          toast.success("Debug sync completed - check function logs for problematic sessions");
+        }
+      });
+    }
+  }, [user?.affiliateCode, debugSyncTriggered, authIsLoading]);
 
   // Memoized month change handler to prevent unnecessary re-renders
   const handleMonthChange = useCallback(async (year: number, month: number) => {
@@ -106,6 +132,7 @@ export default function Dashboard() {
       toast.error(error);
     }
   }, [error]);
+
   const handleRefresh = async () => {
     if (!dataRefreshing && user?.affiliateCode) {
       setDataRefreshing(true);
@@ -121,6 +148,8 @@ export default function Dashboard() {
       }
     }
   };
+
+  // ... keep existing code (getDateRangeDescription, getViewTypeIndicator, getAyoubStartDateInfo functions)
   const getDateRangeDescription = () => {
     if (selectedYear === 0 && selectedMonth === 0) {
       return "All time overview";
@@ -130,6 +159,7 @@ export default function Dashboard() {
       year: 'numeric'
     });
   };
+
   const getViewTypeIndicator = () => {
     if (selectedYear === 0 && selectedMonth === 0) {
       return <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/10 px-3 py-1 rounded-full">
@@ -142,6 +172,7 @@ export default function Dashboard() {
         Monthly View
       </div>;
   };
+
   const getAyoubStartDateInfo = () => {
     if (user?.affiliateCode === "ayoub") {
       return (
@@ -153,7 +184,10 @@ export default function Dashboard() {
     }
     return null;
   };
+
   const isDataLoading = affiliateIsLoading || monthSwitching;
+
+  // ... keep existing code (renderDashboardContent function)
   const renderDashboardContent = () => {
     console.log("Rendering dashboard content - conditions check:");
     console.log("- authIsLoading:", authIsLoading);
@@ -279,6 +313,7 @@ export default function Dashboard() {
       </>
     );
   };
+
   console.log("About to render dashboard layout");
   return <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -295,6 +330,12 @@ export default function Dashboard() {
                   </p>
                   {getViewTypeIndicator()}
                   {getAyoubStartDateInfo()}
+                  {user?.affiliateCode === "ayoub" && debugSyncTriggered && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-yellow-500/10 px-3 py-1 rounded-full">
+                      <AlertCircle className="w-4 h-4" />
+                      Debug sync triggered for May 2025
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
