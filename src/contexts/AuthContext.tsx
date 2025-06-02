@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -33,12 +34,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-  // Enhanced email-based mapping for known users - FIXED: Nic should use 'nic' affiliate code, not 'admin'
+  // Enhanced email-based mapping for known users
   const getKnownUserData = (email: string): { affiliateCode: string; role: AppRole; name: string } | null => {
     const emailLower = email.toLowerCase();
     const knownUsers: Record<string, { affiliateCode: string; role: AppRole; name: string }> = {
       'admin@whaamkabaam.com': { affiliateCode: 'admin', role: 'admin', name: 'Admin' },
-      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' }, // FIXED: Nic should be 'nic', not 'admin'
+      'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' },
       'maru@whaamkabaam.com': { affiliateCode: 'maru', role: 'affiliate', name: 'Maru' },
       'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' }
     };
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (affiliateData) {
           console.log("AuthContext: Found affiliate data via direct query:", affiliateData);
-          // CRITICAL FIX: Only admin@whaamkabaam.com should be admin
+          // Only admin@whaamkabaam.com should be admin
           const isUserAdmin = currentUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
           const finalUser: UserWithRole = {
             ...currentUser,
@@ -140,7 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const detailedUser = await fetchUserData(newSession.user.id, newSession.user);
             console.log("AuthContext: fetchUserData completed successfully:", detailedUser);
             setUser(detailedUser);
-            // CRITICAL FIX: Only set isAdmin true for admin@whaamkabaam.com
+            // Only set isAdmin true for admin@whaamkabaam.com
             const adminStatus = detailedUser.role === 'admin' && detailedUser.email?.toLowerCase() === 'admin@whaamkabaam.com';
             setIsAdmin(adminStatus);
             console.log("AuthContext: Setting isAdmin to:", adminStatus, "for user:", detailedUser.email);
@@ -157,7 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             
             setUser(fallbackUser);
-            // CRITICAL FIX: Only admin@whaamkabaam.com is admin
+            // Only admin@whaamkabaam.com is admin
             const adminStatus = knownUserData?.role === 'admin' && newSession.user.email?.toLowerCase() === 'admin@whaamkabaam.com';
             setIsAdmin(adminStatus);
             console.log("AuthContext: Fallback setting isAdmin to:", adminStatus, "for user:", newSession.user.email);
@@ -213,27 +214,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return data;
     } catch (err: any) {
       console.error("Login exception:", err);
-      
-      // FIXED: Use correct credentials for auto-initialization
-      if ((email === "admin@whaamkabaam.com" && password === "AdminTest123") ||
-          (email === "nic@whaamkabaam.com" && password === "Test1234!")) {
-        try {
-          console.log("Attempting to initialize users via edge function...");
-          const { data: initData, error: initError } = await supabase.functions.invoke<any>("setup-initial-users");
-          
-          if (initError) {
-            console.error("Error initializing users:", initError);
-          } else if (initData) {
-            console.log("Users initialized:", initData);
-            toast.info("Created test users. Please try logging in again.");
-            setError("Users initialized. Please try logging in again.");
-            throw new Error("Users initialized. Please try logging in again.");
-          }
-        } catch (initErr) {
-          console.error("Error during user initialization:", initErr);
-        }
-      }
-      
       setError(err.message || "Login failed");
       throw err;
     } finally {

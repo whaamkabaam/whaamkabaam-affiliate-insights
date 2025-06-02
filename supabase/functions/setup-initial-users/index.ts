@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
 import { createClient as createAdminClient } from 'https://esm.sh/@supabase/supabase-js@2.26.0';
@@ -15,6 +16,26 @@ const adminAuthClient = createAuthClient(supabaseUrl, supabaseServiceKey, {
   },
 });
 
+// Generate a secure random password
+function generateSecurePassword(length: number = 16): string {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  
+  // Ensure at least one of each type
+  password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // uppercase
+  password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // lowercase
+  password += '0123456789'[Math.floor(Math.random() * 10)]; // number
+  password += '!@#$%^&*'[Math.floor(Math.random() * 8)]; // special char
+  
+  // Fill the rest randomly
+  for (let i = 4; i < length; i++) {
+    password += charset[Math.floor(Math.random() * charset.length)];
+  }
+  
+  // Shuffle the password to randomize the position of required characters
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,16 +45,18 @@ serve(async (req) => {
   try {
     const { user } = await req.json();
 
-    // 1. Create Users
+    // 1. Create Users with secure passwords
     async function setupUsers() {
-      console.log("Setting up initial users...");
+      console.log("Setting up initial users with secure passwords...");
       
       const users = [
-        { email: "ayoub@whaamkabaam.com", password: "Test1234!", name: "Ayoub Test" },
-        { email: "nic@whaamkabaam.com", password: "Test1234!", name: "Nic Test" },
-        { email: "maru@whaamkabaam.com", password: "Test1234!", name: "Maru Test" },
-        { email: "admin@whaamkabaam.com", password: "AdminTest123", name: "Admin User" }
+        { email: "ayoub@whaamkabaam.com", name: "Ayoub Test" },
+        { email: "nic@whaamkabaam.com", name: "Nic Test" },
+        { email: "maru@whaamkabaam.com", name: "Maru Test" },
+        { email: "admin@whaamkabaam.com", name: "Admin User" }
       ];
+      
+      const createdUsers = [];
       
       for (const userData of users) {
         try {
@@ -45,10 +68,13 @@ serve(async (req) => {
             continue;
           }
           
+          // Generate secure password
+          const securePassword = generateSecurePassword(20);
+          
           // Create user
           const { data, error } = await adminAuthClient.createUser({
             email: userData.email,
-            password: userData.password,
+            password: securePassword,
             user_metadata: {
               name: userData.name
             }
@@ -58,6 +84,13 @@ serve(async (req) => {
             console.error(`Error creating user ${userData.email}: ${error.message}`);
           } else {
             console.log(`User ${userData.email} created with ID: ${data.user?.id}`);
+            
+            // Store the generated password info for the response
+            createdUsers.push({
+              email: userData.email,
+              password: securePassword,
+              name: userData.name
+            });
             
             // Create profile for the user
             const { error: profileError } = await supabaseAdmin
@@ -79,6 +112,8 @@ serve(async (req) => {
           console.error(`Error setting up user ${userData.email}:`, err);
         }
       }
+      
+      return createdUsers;
     }
 
     // After creating users, ensure they have affiliate entries
@@ -159,13 +194,18 @@ serve(async (req) => {
       }
     }
 
-    await setupUsers();
+    const createdUsers = await setupUsers();
     await setupAffiliates();
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Initial users and affiliates setup completed.' 
+        message: 'Initial users and affiliates setup completed with secure passwords.',
+        users: createdUsers.map(user => ({
+          email: user.email,
+          name: user.name,
+          password: user.password
+        }))
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

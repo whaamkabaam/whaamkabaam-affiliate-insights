@@ -12,7 +12,6 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
   const { login, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,19 +31,7 @@ export function LoginForm() {
       }
     } catch (err: any) {
       console.error("Login form error:", err);
-      
-      // If it's the admin account and login failed, try to initialize users
-      if (email === "admin@whaamkabaam.com" && password === "AdminTest123" && !isInitializing) {
-        setIsInitializing(true);
-        toast.info("Creating test users. Please try logging in again in a moment.");
-        
-        // Add a small delay before allowing another login attempt
-        setTimeout(() => {
-          setIsInitializing(false);
-        }, 3000);
-      } else {
-        toast.error(err?.message || "Login failed. Please check your credentials.");
-      }
+      toast.error(err?.message || "Login failed. Please check your credentials.");
     }
   };
 
@@ -82,10 +69,10 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="email@whaamkabaam.com"
+              placeholder="Enter your email"
               autoComplete="email"
               className="focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={isLoading || isInitializing}
+              disabled={isLoading}
             />
           </div>
           <div className="space-y-2">
@@ -104,16 +91,16 @@ export function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 autoComplete="current-password"
                 className="focus:outline-none focus:ring-2 focus:ring-primary pr-10"
-                disabled={isLoading || isInitializing}
+                disabled={isLoading}
               />
               <button 
                 type="button"
                 onClick={toggleShowPassword}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                disabled={isLoading || isInitializing}
+                disabled={isLoading}
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -126,10 +113,9 @@ export function LoginForm() {
           <Button 
             type="submit" 
             className="w-full bg-brand-red hover:bg-brand-red/90 text-white" 
-            disabled={isLoading || isInitializing}
+            disabled={isLoading}
           >
-            {isLoading ? "Logging in..." : 
-             isInitializing ? "Initializing users..." : "Log In"}
+            {isLoading ? "Logging in..." : "Log In"}
           </Button>
         </form>
       </CardContent>
