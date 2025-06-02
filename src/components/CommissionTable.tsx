@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistance } from "date-fns";
 import { censorEmail } from "@/utils/emailUtils";
 import { filterCommissions } from "@/utils/affiliateUtils";
+import { getProductName } from "@/utils/productUtils";
 
 interface CommissionTableProps {
   limit?: number;
@@ -98,7 +99,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="text-xs">
-                      {commission.productId || "Unknown Product"}
+                      {getProductName(commission.productId)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-bold text-green-600">
