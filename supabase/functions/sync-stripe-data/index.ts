@@ -155,6 +155,8 @@ serve(async (req) => {
         const sessionDate = new Date(session.created * 1000);
         const actualProductIdInSession = session.line_items?.data?.[0]?.price?.product || null;
         
+        console.log(`Processing session ${session.id}: Product ${actualProductIdInSession}, Date: ${sessionDate.toISOString()}, Customer: ${session.customer_details?.email || 'unknown'}`);
+        
         // Check if session has affiliate discount
         let stripePromotionCodeId = null;
         let affiliateCode = null;
@@ -172,10 +174,11 @@ serve(async (req) => {
           }
         }
 
-        // Handle Ayoub's special case: coaching product sales without discount codes
-        if (!stripePromotionCodeId && actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && sessionDate >= AYOUB_START_DATE) {
+        // Handle Ayoub's special case: ONLY coaching product sales without discount codes after his start date
+        if (!stripePromotionCodeId && 
+            actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID && 
+            sessionDate >= AYOUB_START_DATE) {
           // This is a coaching product sale with no discount code after Ayoub's start date
-          // Check if it's after Ayoub's start date and assign to Ayoub
           console.log(`Found coaching product sale without discount code on ${sessionDate.toISOString()}, assigning to Ayoub`);
           affiliateCode = AYOUB_AFFILIATE_CODE;
           stripePromotionCodeId = "no_discount_ayoub_coaching"; // Special identifier for tracking
@@ -186,10 +189,11 @@ serve(async (req) => {
         
         // Skip sessions without affiliate assignment
         if (!affiliateCode) {
+          console.log(`No affiliate assignment for session ${session.id}, skipping`);
           continue;
         }
 
-        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'})`);
+        console.log(`Found affiliate session: ${session.id} -> ${affiliateCode} (${stripePromotionCodeId || 'no discount'}) for product ${actualProductIdInSession}`);
 
         // --- Updated commission logic for Ayoub's date filter ---
         const amountPaid = (session.amount_total || 0) / 100;
@@ -203,6 +207,7 @@ serve(async (req) => {
           } else {
             console.log(`SyncStripe: Processing session ${session.id} for AYOUB. Product: ${actualProductIdInSession}. Promo code on session: ${stripePromotionCodeId || 'none'}. Date: ${sessionDate.toISOString()}`);
 
+            // CRITICAL FIX: Only process if it's actually the coaching product
             if (actualProductIdInSession === AYOUB_COACHING_PRODUCT_ID) {
               let ayoubQualifiesForFlatCommission = false;
 
