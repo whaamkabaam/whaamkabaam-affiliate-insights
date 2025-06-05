@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,9 +11,10 @@ import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { SelectedDatePanel } from "@/components/calendar/SelectedDatePanel";
 import { RecentEventsPanel } from "@/components/calendar/RecentEventsPanel";
+import { AdminCalendarView } from "@/components/admin/AdminCalendarView";
 
 export default function Calendar() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { commissions, fetchCommissionData } = useAffiliate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
@@ -74,6 +74,21 @@ export default function Calendar() {
   };
 
   const selectedDateEvents = getSelectedDateEvents();
+
+  // If admin, show the enhanced admin calendar view
+  if (isAdmin) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <div className="flex-1">
+          <DashboardHeader />
+          <main className="flex-1 p-4 md:p-6">
+            <AdminCalendarView />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">

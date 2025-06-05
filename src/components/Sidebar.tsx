@@ -26,8 +26,8 @@ export function Sidebar({ className, ...props }: SidebarProps) {
               <HomeIcon className="h-4 w-4" />
               <span>Dashboard</span>
             </NavLink>
-            {/* Only show Analytics for non-Ayoub users */}
-            {user?.affiliateCode !== 'ayoub' && (
+            {/* Only show Analytics for non-admin users */}
+            {!isAdmin && (
               <NavLink 
                 to="/dashboard/analytics"
                 className={({ isActive }) => 
@@ -51,7 +51,7 @@ export function Sidebar({ className, ...props }: SidebarProps) {
               }
             >
               <UsersIcon className="h-4 w-4" />
-              <span>Customers</span>
+              <span>{isAdmin ? "Network Customers" : "Customers"}</span>
             </NavLink>
             <NavLink 
               to="/dashboard/calendar"
@@ -63,7 +63,7 @@ export function Sidebar({ className, ...props }: SidebarProps) {
               }
             >
               <CalendarIcon className="h-4 w-4" />
-              <span>Calendar</span>
+              <span>{isAdmin ? "Network Calendar" : "Calendar"}</span>
             </NavLink>
             <NavLink 
               to="/dashboard/settings"
