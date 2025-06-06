@@ -25,13 +25,12 @@ interface CustomerData {
 
 export const AdminCustomersView = () => {
   const { fetchCommissionData, commissions, affiliateOverviews } = useAffiliate();
-  const [selectedYear, setSelectedYear] = useState(0);
-  const [selectedMonth, setSelectedMonth] = useState(0);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAffiliate, setSelectedAffiliate] = useState<string>("all");
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasFetched, setHasFetched] = useState(false);
 
   // Filter out admin from affiliate overviews
   const realAffiliates = affiliateOverviews.filter(affiliate => 
@@ -87,11 +86,9 @@ export const AdminCustomersView = () => {
     setIsLoading(true);
     setSelectedYear(year);
     setSelectedMonth(month);
-    setHasFetched(false);
     
     try {
-      await fetchCommissionData(year, month, false);
-      setHasFetched(true);
+      await fetchCommissionData(year, month, true); // Force refresh for admin
     } catch (error) {
       console.error("Error fetching customer data:", error);
       toast.error("Failed to load customer data");
@@ -102,19 +99,20 @@ export const AdminCustomersView = () => {
 
   // Initial data fetch
   useEffect(() => {
-    if (!hasFetched) {
-      console.log(`Admin Customers: Initial fetch`);
-      handleMonthChange(selectedYear, selectedMonth);
-    }
-  }, [selectedYear, selectedMonth, hasFetched, handleMonthChange]);
+    console.log(`Admin Customers: Initial fetch for ${selectedYear}-${selectedMonth}`);
+    handleMonthChange(selectedYear, selectedMonth);
+  }, []); // Only run once on mount
 
   // Process data when commissions change
   useEffect(() => {
     if (commissions.length > 0) {
       processCustomerData();
       setIsLoading(false);
+    } else if (!isLoading) {
+      // If no commissions and not loading, show empty state
+      setCustomers([]);
     }
-  }, [commissions, processCustomerData]);
+  }, [commissions, processCustomerData, isLoading]);
 
   const filteredCustomers = customers.filter(customer =>
     customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||

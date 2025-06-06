@@ -8,7 +8,6 @@ import { useAffiliate } from "@/contexts/AffiliateContext";
 import { filterCommissions } from "@/utils/affiliateUtils";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
-import { SelectedDatePanel } from "@/components/calendar/SelectedDatePanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatsCard } from "@/components/StatsCard";
 
@@ -16,7 +15,6 @@ export const AdminCalendarView = () => {
   const { commissions, fetchCommissionData, affiliateOverviews } = useAffiliate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
   const [selectedAffiliate, setSelectedAffiliate] = useState<string>("all");
@@ -29,15 +27,12 @@ export const AdminCalendarView = () => {
 
   // Fetch data for the current month when component mounts or month changes
   useEffect(() => {
-    if (!hasFetched) {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth() + 1;
-      console.log(`Admin Calendar: Fetching data for year: ${year}, month: ${month}`);
-      setIsLoading(true);
-      setHasFetched(true);
-      fetchCommissionData(year, month, false).finally(() => setIsLoading(false));
-    }
-  }, [currentMonth, hasFetched, fetchCommissionData]);
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    console.log(`Admin Calendar: Fetching data for year: ${year}, month: ${month}`);
+    setIsLoading(true);
+    fetchCommissionData(year, month, true).finally(() => setIsLoading(false)); // Force refresh for admin
+  }, [currentMonth, fetchCommissionData]);
 
   // Filter commissions based on selected affiliate
   const getFilteredCommissions = useCallback(() => {
@@ -77,13 +72,11 @@ export const AdminCalendarView = () => {
 
   const nextMonth = useCallback(() => {
     setCurrentMonth(prev => addMonths(prev, 1));
-    setHasFetched(false);
     setSelectedDate(null);
   }, []);
 
   const prevMonth = useCallback(() => {
     setCurrentMonth(prev => subMonths(prev, 1));
-    setHasFetched(false);
     setSelectedDate(null);
   }, []);
 
@@ -267,6 +260,11 @@ export const AdminCalendarView = () => {
                   </div>
                 ))}
               </div>
+              {filteredCommissions.length === 0 && !isLoading && (
+                <div className="text-center py-4 text-muted-foreground">
+                  No commission data available for this period.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
