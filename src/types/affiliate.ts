@@ -1,4 +1,3 @@
-
 export interface Commission {
   sessionId: string;
   paymentIntent?: string;
@@ -7,6 +6,7 @@ export interface Commission {
   commission: number;
   date: string;
   productId: string;
+  affiliateCode?: string;
 }
 
 export interface CommissionSummary {

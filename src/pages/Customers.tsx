@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { censorEmail } from "@/utils/emailUtils";
 import { filterCommissions } from "@/utils/affiliateUtils";
+import { AdminCustomersView } from "@/components/admin/AdminCustomersView";
 
 interface CustomerData {
   email: string;
