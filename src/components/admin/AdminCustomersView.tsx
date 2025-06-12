@@ -24,6 +24,15 @@ interface CustomerData {
   affiliateCode?: string;
 }
 
+// Helper function to format date in European format (DD/MM/YYYY)
+const formatEuropeanDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export const AdminCustomersView = () => {
   const { fetchCommissionData, commissions, affiliateOverviews } = useAffiliate();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -77,7 +86,10 @@ export const AdminCustomersView = () => {
       }
     });
     
-    const customerList = Object.values(customerMap).sort((a, b) => b.revenue - a.revenue);
+    // Sort customers by last purchase date (newest first)
+    const customerList = Object.values(customerMap).sort((a, b) => 
+      new Date(b.lastPurchase).getTime() - new Date(a.lastPurchase).getTime()
+    );
     console.log(`Admin Customers: Processed ${customerList.length} unique customers`);
     setCustomers(customerList);
   }, [commissions, selectedAffiliate]);
@@ -140,7 +152,7 @@ export const AdminCustomersView = () => {
       customer.purchases.toString(),
       customer.revenue.toFixed(2),
       customer.commission.toFixed(2),
-      new Date(customer.lastPurchase).toLocaleDateString()
+      formatEuropeanDate(customer.lastPurchase)
     ]);
     
     const csvContent = [
@@ -289,7 +301,7 @@ export const AdminCustomersView = () => {
                         <TableCell className="text-right">{customer.purchases}</TableCell>
                         <TableCell className="text-right font-medium">${customer.revenue.toFixed(2)}</TableCell>
                         <TableCell className="text-right font-medium text-green-600">${customer.commission.toFixed(2)}</TableCell>
-                        <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatEuropeanDate(customer.lastPurchase)}</TableCell>
                       </TableRow>
                     );
                   })}

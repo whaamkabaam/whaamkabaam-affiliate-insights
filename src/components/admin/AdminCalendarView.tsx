@@ -12,6 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatsCard } from "@/components/StatsCard";
 import { censorEmail } from "@/utils/emailUtils";
 
+// Helper function to format date in European format (DD/MM/YYYY)
+const formatEuropeanDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export const AdminCalendarView = () => {
   const { commissions, fetchCommissionData, affiliateOverviews } = useAffiliate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -193,7 +202,7 @@ export const AdminCalendarView = () => {
             <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
               <CardHeader>
                 <CardTitle className="text-lg">
-                  {format(selectedDate, "MMMM d, yyyy")}
+                  {formatEuropeanDate(selectedDate.toISOString())}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -240,14 +249,17 @@ export const AdminCalendarView = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3 max-h-64 overflow-y-auto">
-                {filteredCommissions.slice(0, 10).map((commission, index) => (
+                {filteredCommissions
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .slice(0, 10)
+                  .map((commission, index) => (
                   <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
                         {censorEmail(commission.customerEmail)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(commission.date), "MMM d, HH:mm")}
+                        {formatEuropeanDate(commission.date)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

@@ -24,6 +24,15 @@ interface CustomerData {
   lastPurchase: string;
 }
 
+// Helper function to format date in European format (DD/MM/YYYY)
+const formatEuropeanDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function Customers() {
   const { fetchCommissionData, commissions } = useAffiliate();
   const { isAuthenticated, isAdmin, user } = useAuth();
@@ -67,7 +76,10 @@ export default function Customers() {
       }
     });
     
-    const customerList = Object.values(customerMap);
+    // Sort customers by last purchase date (newest first)
+    const customerList = Object.values(customerMap).sort((a, b) => 
+      new Date(b.lastPurchase).getTime() - new Date(a.lastPurchase).getTime()
+    );
     console.log(`Customers: Processed ${customerList.length} unique customers`);
     setCustomers(customerList);
   }, [commissions, user?.affiliateCode]);
@@ -127,7 +139,7 @@ export default function Customers() {
       censorEmail(customer.email),
       customer.purchases.toString(),
       customer.commission.toFixed(2),
-      new Date(customer.lastPurchase).toLocaleDateString()
+      formatEuropeanDate(customer.lastPurchase)
     ]);
     
     const csvContent = [
@@ -234,7 +246,7 @@ export default function Customers() {
                           </TableCell>
                           <TableCell className="text-right">{customer.purchases}</TableCell>
                           <TableCell className="text-right">${customer.commission.toFixed(2)}</TableCell>
-                          <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
+                          <TableCell>{formatEuropeanDate(customer.lastPurchase)}</TableCell>
                         </TableRow>
                       );
                     })}
