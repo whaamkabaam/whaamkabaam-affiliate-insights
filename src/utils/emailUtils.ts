@@ -1,11 +1,6 @@
 
-// Utility function to censor email addresses (but not for admin users)
-export const censorEmail = (email: string, isAdmin: boolean = false): string => {
-  // Admin users see uncensored emails
-  if (isAdmin) {
-    return email;
-  }
-
+// Utility function to censor email addresses for all users
+export const censorEmail = (email: string): string => {
   if (!email || !email.includes('@')) {
     return email;
   }

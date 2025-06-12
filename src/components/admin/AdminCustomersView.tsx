@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { filterCommissions } from "@/utils/affiliateUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatsCard } from "@/components/StatsCard";
+import { censorEmail } from "@/utils/emailUtils";
 
 interface CustomerData {
   email: string;
@@ -115,7 +116,7 @@ export const AdminCustomersView = () => {
   }, [commissions, processCustomerData, isLoading]);
 
   const filteredCustomers = customers.filter(customer =>
-    customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    censorEmail(customer.email).toLowerCase().includes(searchQuery.toLowerCase()) ||
     customer.affiliateCode?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -125,7 +126,7 @@ export const AdminCustomersView = () => {
   const totalCommission = filteredCustomers.reduce((sum, customer) => sum + customer.commission, 0);
   const avgOrderValue = totalCustomers > 0 ? totalRevenue / filteredCustomers.reduce((sum, customer) => sum + customer.purchases, 0) : 0;
 
-  // Export customers data as CSV (uncensored for admin)
+  // Export customers data as CSV (censored for all users)
   const exportCsv = () => {
     if (filteredCustomers.length === 0) {
       toast.error("No data to export");
@@ -134,7 +135,7 @@ export const AdminCustomersView = () => {
     
     const headers = ["Email", "Affiliate", "Purchases", "Revenue", "Commission", "Last Purchase"];
     const rows = filteredCustomers.map(customer => [
-      customer.email, // Uncensored for admin
+      censorEmail(customer.email), // Censored for all users
       customer.affiliateCode || 'unknown',
       customer.purchases.toString(),
       customer.revenue.toFixed(2),
@@ -266,29 +267,32 @@ export const AdminCustomersView = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCustomers.map((customer, index) => (
-                    <TableRow key={`${customer.email}-${index}`}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Avatar>
-                            <div className="bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center h-full w-full">
-                              {customer.email.charAt(0).toUpperCase()}
-                            </div>
-                          </Avatar>
-                          <span className="max-w-xs truncate">{customer.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-mono">
-                          {customer.affiliateCode}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{customer.purchases}</TableCell>
-                      <TableCell className="text-right font-medium">${customer.revenue.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium text-green-600">${customer.commission.toFixed(2)}</TableCell>
-                      <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredCustomers.map((customer, index) => {
+                    const censoredEmail = censorEmail(customer.email);
+                    return (
+                      <TableRow key={`${customer.email}-${index}`}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Avatar>
+                              <div className="bg-primary text-primary-foreground font-medium text-xs flex items-center justify-center h-full w-full">
+                                {censoredEmail.charAt(0).toUpperCase()}
+                              </div>
+                            </Avatar>
+                            <span className="max-w-xs truncate">{censoredEmail}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-mono">
+                            {customer.affiliateCode}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">{customer.purchases}</TableCell>
+                        <TableCell className="text-right font-medium">${customer.revenue.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-medium text-green-600">${customer.commission.toFixed(2)}</TableCell>
+                        <TableCell>{new Date(customer.lastPurchase).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductBadge } from "./ProductBadge";
 import { AlertCircle } from "lucide-react";
+import { censorEmail } from "@/utils/emailUtils";
 
 interface CommissionTableProps {
   limit?: number;
@@ -118,7 +119,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
                   </TableCell>
                   <TableCell>
                     <div className="max-w-[200px] truncate">
-                      {transaction.customerEmail}
+                      {censorEmail(transaction.customerEmail)}
                     </div>
                   </TableCell>
                   <TableCell>

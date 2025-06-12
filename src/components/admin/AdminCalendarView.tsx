@@ -10,6 +10,7 @@ import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatsCard } from "@/components/StatsCard";
+import { censorEmail } from "@/utils/emailUtils";
 
 export const AdminCalendarView = () => {
   const { commissions, fetchCommissionData, affiliateOverviews } = useAffiliate();
@@ -80,7 +81,7 @@ export const AdminCalendarView = () => {
     setSelectedDate(null);
   }, []);
 
-  // Get events for selected date with uncensored data for admin
+  // Get events for selected date with censored data for all users
   const getSelectedDateEvents = () => {
     if (!selectedDate) return [];
     
@@ -216,7 +217,7 @@ export const AdminCalendarView = () => {
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {commission.customerEmail}
+                            {censorEmail(commission.customerEmail)}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {format(new Date(commission.date), "HH:mm")}
@@ -243,7 +244,7 @@ export const AdminCalendarView = () => {
                   <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        {commission.customerEmail}
+                        {censorEmail(commission.customerEmail)}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {format(new Date(commission.date), "MMM d, HH:mm")}

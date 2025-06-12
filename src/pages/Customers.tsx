@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -110,10 +111,10 @@ export default function Customers() {
   }, [commissions, processCustomerData]);
 
   const filteredCustomers = customers.filter(customer =>
-    customer.email.toLowerCase().includes(searchQuery.toLowerCase())
+    censorEmail(customer.email).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Export customers data as CSV
+  // Export customers data as CSV (always censored)
   const exportCsv = () => {
     if (filteredCustomers.length === 0) {
       toast.error("No data to export");
