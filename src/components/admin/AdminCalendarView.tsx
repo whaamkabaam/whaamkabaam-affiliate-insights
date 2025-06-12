@@ -103,18 +103,20 @@ export const AdminCalendarView = () => {
   const selectedDateEvents = getSelectedDateEvents();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Network Calendar</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Network Calendar
+          </h1>
+          <p className="text-lg text-muted-foreground mt-2">
             Visual overview of commission events across your affiliate network
           </p>
         </div>
         <div className="w-64">
           <Select value={selectedAffiliate} onValueChange={setSelectedAffiliate}>
-            <SelectTrigger>
-              <Filter className="w-4 h-4 mr-2" />
+            <SelectTrigger className="border-primary/20 focus:border-primary">
+              <Filter className="w-4 h-4 mr-2 text-primary" />
               <SelectValue placeholder="Filter by affiliate" />
             </SelectTrigger>
             <SelectContent>
@@ -130,34 +132,34 @@ export const AdminCalendarView = () => {
       </div>
 
       {/* Monthly Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Monthly Commission"
           value={`$${monthlyStats.totalCommission.toFixed(2)}`}
           description={selectedAffiliate === "all" ? "Across all affiliates" : `From ${selectedAffiliate}`}
-          icon={<DollarSign className="w-4 h-4" />}
-          className="bg-green-50 border-green-200"
+          icon={<DollarSign className="w-5 h-5" />}
+          className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:shadow-lg transition-all duration-300"
         />
         <StatsCard
           title="Monthly Revenue"
           value={`$${monthlyStats.totalRevenue.toFixed(2)}`}
           description="Total sales volume"
-          icon={<TrendingUp className="w-4 h-4" />}
-          className="bg-blue-50 border-blue-200"
+          icon={<TrendingUp className="w-5 h-5" />}
+          className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200 hover:shadow-lg transition-all duration-300"
         />
         <StatsCard
           title="Transactions"
           value={monthlyStats.totalTransactions}
           description="Total sales count"
-          icon={<CalendarIcon className="w-4 h-4" />}
-          className="bg-purple-50 border-purple-200"
+          icon={<CalendarIcon className="w-5 h-5" />}
+          className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200 hover:shadow-lg transition-all duration-300"
         />
         <StatsCard
           title="Unique Customers"
           value={monthlyStats.uniqueCustomers}
           description="Individual buyers"
-          icon={<Users className="w-4 h-4" />}
-          className="bg-orange-50 border-orange-200"
+          icon={<Users className="w-5 h-5" />}
+          className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200 hover:shadow-lg transition-all duration-300"
         />
       </div>
 
@@ -168,20 +170,23 @@ export const AdminCalendarView = () => {
         onNextMonth={nextMonth}
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Card className="overflow-hidden border-primary/10">
-            <CardHeader className="bg-gradient-to-r from-primary/5 to-secondary/5">
-              <CardTitle className="flex items-center">
-                <TrendingUp className="mr-2 h-5 w-5 text-primary" />
+          <Card className="overflow-hidden border-primary/20 shadow-xl bg-gradient-to-br from-background to-muted/20">
+            <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b border-primary/10">
+              <CardTitle className="flex items-center text-xl">
+                <TrendingUp className="mr-3 h-6 w-6 text-primary" />
                 Network Commission Events
+                <Badge variant="secondary" className="ml-auto">
+                  {Object.keys(datesWithEvents).length} active days
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
-                <div className="text-center py-12">
-                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Loading calendar data...</p>
+                <div className="text-center py-16">
+                  <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+                  <p className="mt-4 text-lg text-muted-foreground">Loading calendar data...</p>
                 </div>
               ) : (
                 <CalendarGrid
@@ -199,33 +204,34 @@ export const AdminCalendarView = () => {
 
         <div className="space-y-6">
           {selectedDate && (
-            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  {formatEuropeanDate(selectedDate.toISOString())}
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-secondary/5 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl flex items-center justify-between">
+                  <span>{formatEuropeanDate(selectedDate.toISOString())}</span>
+                  <Badge variant="outline" className="border-primary/40 text-primary">
+                    {selectedDateEvents.length} events
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {selectedDateEvents.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="border-primary/30">
-                        {selectedDateEvents.length} transaction{selectedDateEvents.length > 1 ? 's' : ''}
-                      </Badge>
-                      <div className="text-sm font-medium text-primary">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-background/60 rounded-lg border border-primary/20">
+                      <div className="text-sm text-muted-foreground">Total Commission</div>
+                      <div className="text-lg font-bold text-green-600">
                         +${selectedDateEvents.reduce((sum, e) => sum + e.commission, 0).toFixed(2)}
                       </div>
                     </div>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
                       {selectedDateEvents.map((commission, index) => (
-                        <div key={index} className="p-3 bg-background/50 rounded-lg border border-primary/10">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium">+${commission.commission.toFixed(2)}</span>
-                            <Badge variant="secondary" className="text-xs">
+                        <div key={index} className="p-4 bg-background/80 rounded-lg border border-primary/15 hover:border-primary/30 transition-all duration-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-semibold text-green-600">+${commission.commission.toFixed(2)}</span>
+                            <Badge variant="secondary" className="text-xs font-mono">
                               {commission.affiliateCode}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-sm text-muted-foreground mb-1">
                             {censorEmail(commission.customerEmail)}
                           </div>
                           <div className="text-xs text-muted-foreground">
@@ -236,24 +242,30 @@ export const AdminCalendarView = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No transactions on this date</p>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CalendarIcon className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                    <p>No transactions on this date</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
           )}
 
           {/* Recent Events Panel */}
-          <Card>
+          <Card className="shadow-lg border-primary/20">
             <CardHeader>
-              <CardTitle className="text-lg">Recent Activity</CardTitle>
+              <CardTitle className="text-xl flex items-center">
+                <TrendingUp className="mr-2 h-5 w-5 text-primary" />
+                Recent Activity
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
+              <div className="space-y-3 max-h-80 overflow-y-auto">
                 {filteredCommissions
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .slice(0, 10)
+                  .slice(0, 15)
                   .map((commission, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                  <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-all duration-200 border border-transparent hover:border-primary/20">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
                         {censorEmail(commission.customerEmail)}
@@ -262,11 +274,11 @@ export const AdminCalendarView = () => {
                         {formatEuropeanDate(commission.date)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="secondary" className="text-xs font-mono">
                         {commission.affiliateCode}
                       </Badge>
-                      <div className="text-sm font-semibold text-green-600">
+                      <div className="text-sm font-bold text-green-600">
                         +${commission.commission.toFixed(2)}
                       </div>
                     </div>
@@ -274,8 +286,9 @@ export const AdminCalendarView = () => {
                 ))}
               </div>
               {filteredCommissions.length === 0 && !isLoading && (
-                <div className="text-center py-4 text-muted-foreground">
-                  No commission data available for this period.
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                  <p>No commission data available for this period.</p>
                 </div>
               )}
             </CardContent>

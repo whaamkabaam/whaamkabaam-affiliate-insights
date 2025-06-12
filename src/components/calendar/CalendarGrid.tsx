@@ -35,10 +35,10 @@ export function CalendarGrid({
   const calendarDays = generateCalendarDays();
 
   return (
-    <div className="calendar-container">
-      <div className="grid grid-cols-7 gap-0">
+    <div className="calendar-container p-4">
+      <div className="grid grid-cols-7 gap-2 rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted/30">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <div key={day} className="h-12 flex items-center justify-center font-medium bg-muted/10 text-muted-foreground border-r border-b border-border/30 last:border-r-0">
+          <div key={day} className="h-14 flex items-center justify-center font-semibold text-sm bg-gradient-to-br from-primary/10 to-primary/5 text-primary border-b-2 border-primary/20">
             {day}
           </div>
         ))}
