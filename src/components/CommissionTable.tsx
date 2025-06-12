@@ -1,4 +1,3 @@
-
 import { useAffiliate } from "@/contexts/AffiliateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -18,6 +17,15 @@ import { censorEmail } from "@/utils/emailUtils";
 interface CommissionTableProps {
   limit?: number;
 }
+
+// Helper function to format date in European format (DD/MM/YYYY)
+const formatEuropeanDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
 
 export function CommissionTable({ limit }: CommissionTableProps) {
   const { commissions, isLoading, error } = useAffiliate();
@@ -83,7 +91,12 @@ export function CommissionTable({ limit }: CommissionTableProps) {
     );
   }
 
-  const displayTransactions = limit ? displayCommissions.slice(0, limit) : displayCommissions;
+  // Sort transactions by date (newest first) and apply limit
+  const sortedCommissions = [...displayCommissions].sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  
+  const displayTransactions = limit ? sortedCommissions.slice(0, limit) : sortedCommissions;
 
   return (
     <Card>
@@ -115,7 +128,7 @@ export function CommissionTable({ limit }: CommissionTableProps) {
               {displayTransactions.map((transaction, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">
-                    {new Date(transaction.date).toLocaleDateString()}
+                    {formatEuropeanDate(transaction.date)}
                   </TableCell>
                   <TableCell>
                     <div className="max-w-[200px] truncate">

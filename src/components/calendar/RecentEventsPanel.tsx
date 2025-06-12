@@ -1,5 +1,4 @@
 
-import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Commission } from "@/types/affiliate";
 import { censorEmail } from "@/utils/emailUtils";
@@ -7,6 +6,14 @@ import { censorEmail } from "@/utils/emailUtils";
 interface RecentEventsPanelProps {
   commissions: Commission[];
 }
+
+// Helper function to format date in European format (DD/MM)
+const formatEuropeanDateShort = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  return `${day}/${month}`;
+};
 
 export function RecentEventsPanel({ commissions }: RecentEventsPanelProps) {
   return (
@@ -23,7 +30,7 @@ export function RecentEventsPanel({ commissions }: RecentEventsPanelProps) {
               .map((commission, index) => (
                 <div key={index} className="flex items-center justify-between border-b pb-2 hover:bg-muted/20 -mx-2 px-2 py-2 rounded transition-colors">
                   <div>
-                    <p className="font-medium">{format(new Date(commission.date), "MMM d")}</p>
+                    <p className="font-medium">{formatEuropeanDateShort(commission.date)}</p>
                     <p className="text-sm text-muted-foreground">
                       Commission
                     </p>
