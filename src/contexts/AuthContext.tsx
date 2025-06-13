@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase, AppRole, AffiliateData } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -41,7 +40,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       'admin@whaamkabaam.com': { affiliateCode: 'admin', role: 'admin', name: 'Admin' },
       'nic@whaamkabaam.com': { affiliateCode: 'nic', role: 'affiliate', name: 'Nic' },
       'maru@whaamkabaam.com': { affiliateCode: 'maru', role: 'affiliate', name: 'Maru' },
-      'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' }
+      'ayoub@whaamkabaam.com': { affiliateCode: 'ayoub', role: 'affiliate', name: 'Ayoub' },
+      'tg@whaamkabaam.com': { affiliateCode: 'TG', role: 'affiliate', name: 'TweakingGuy' }
     };
     return knownUsers[emailLower] || null;
   };

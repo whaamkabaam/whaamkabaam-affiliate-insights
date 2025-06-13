@@ -50,7 +50,8 @@ serve(async (req) => {
         { email: "ayoub@whaamkabaam.com", name: "Ayoub Test" },
         { email: "nic@whaamkabaam.com", name: "Nic Test" },
         { email: "maru@whaamkabaam.com", name: "Maru Test" },
-        { email: "admin@whaamkabaam.com", name: "Admin User" }
+        { email: "admin@whaamkabaam.com", name: "Admin User" },
+        { email: "tg@whaamkabaam.com", name: "TweakingGuy" }
       ];
       
       const createdUsers = [];
@@ -72,8 +73,8 @@ serve(async (req) => {
             continue;
           }
           
-          // Generate secure password
-          const securePassword = generateSecurePassword(20);
+          // Use specified password for TG user, generate for others
+          const securePassword = userData.email === "tg@whaamkabaam.com" ? "uSNmHbsJTXes" : generateSecurePassword(20);
           
           // Create user using admin API
           const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -125,12 +126,13 @@ serve(async (req) => {
     async function setupAffiliates() {
       console.log("Setting up affiliate entries for users...");
       
-      // FIXED: Corrected the affiliate mappings
+      // Updated affiliate mappings to include TG
       const affiliateSetups = [
         { email: "ayoub@whaamkabaam.com", code: "ayoub", rate: 0.1, stripePromoId: "promo_1QccV9CgyJ2z2jNZBnSTn73U" },
         { email: "nic@whaamkabaam.com", code: "nic", rate: 0.1, stripePromoId: "promo_1QyefCCgyJ2z2jNZEZv16p7s" },
         { email: "maru@whaamkabaam.com", code: "maru", rate: 0.1, stripePromoId: "promo_1QvpMsCgyJ2z2jNZ0IC6vKLk" },
-        { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2, stripePromoId: "promo_admin" }
+        { email: "admin@whaamkabaam.com", code: "ADMIN", rate: 0.2, stripePromoId: "promo_admin" },
+        { email: "tg@whaamkabaam.com", code: "TG", rate: 0.1, stripePromoId: "promo_1RZTGrCgyJ2z2jNZ4VX8meyl" }
       ];
       
       for (const setup of affiliateSetups) {
